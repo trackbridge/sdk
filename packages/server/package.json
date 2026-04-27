@@ -1,0 +1,41 @@
+{
+  "name": "@trackbridge/server",
+  "version": "0.0.1",
+  "description": "Server-side dual-send conversion tracking for Google Ads and GA4",
+  "license": "MIT",
+  "homepage": "https://trackbridge.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trackbridge/sdk.git",
+    "directory": "packages/server"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@trackbridge/core": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "sideEffects": false
+}

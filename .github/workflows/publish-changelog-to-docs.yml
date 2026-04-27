@@ -1,0 +1,64 @@
+name: Publish changelog to docs
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  push-to-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout docs repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: trackbridge/docs
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          path: docs-checkout
+
+      - name: Set up bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+
+      - name: Append release to data/releases.json
+        env:
+          # Indirection through env vars: ${{ … }} expansions in `run:` are
+          # interpolated into the script source before bash sees them, so
+          # any release field containing shell metacharacters would inject.
+          # Reading via "$ENV_VAR" inside single-quoted argv keeps it inert.
+          RELEASE_VERSION: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+          cd docs-checkout
+          mkdir -p data
+          [ -f data/releases.json ] || echo "[]" > data/releases.json
+          jq \
+            --arg version "$RELEASE_VERSION" \
+            --arg date "$(date -u +%Y-%m-%d)" \
+            --arg body "$RELEASE_BODY" \
+            '[{ version: $version, date: $date, notes: ($body | split("\n") | map(select(length > 0) | { kind: "patch", summary: . })) }] + .' \
+            data/releases.json > data/releases.json.tmp
+          mv data/releases.json.tmp data/releases.json
+
+      - name: Render changelog.mdx
+        run: |
+          cd docs-checkout
+          bun install --frozen-lockfile
+          bun run changelog data/releases.json
+
+      - name: Open PR against trackbridge/docs
+        uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6
+        with:
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          path: docs-checkout
+          branch: changelog/${{ github.event.release.tag_name }}
+          title: 'changelog: ${{ github.event.release.tag_name }}'
+          commit-message: 'docs: append changelog entry for ${{ github.event.release.tag_name }}'
+          body: |
+            Automated PR — appends the release notes for `${{ github.event.release.tag_name }}`
+            to `data/releases.json` and regenerates `src/content/docs/meta/changelog.mdx`.
+            Review the rendered changelog page and merge after the SDK release is final.
+          add-paths: |
+            data/releases.json
+            src/content/docs/meta/changelog.mdx

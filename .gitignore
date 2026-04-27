@@ -1,0 +1,16 @@
+node_modules
+dist
+.turbo
+*.log
+.DS_Store
+.env
+.env.local
+.vscode
+.idea
+coverage
+*.tsbuildinfo
+
+# Internal architecture notes — kept locally, not published
+docs
+CLAUDE.md
+

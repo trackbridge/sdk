@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # We pin third-party actions to commit SHAs (see .github/workflows/*.yml).
+  # Dependabot opens weekly PRs to bump the SHAs with linked changelogs so
+  # the pins don't quietly fall behind upstream security fixes.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - '*'

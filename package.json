@@ -1,0 +1,37 @@
+{
+  "name": "trackbridge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dual-send conversion tracking for Google Ads and GA4",
+  "license": "MIT",
+  "author": "Trackbridge",
+  "homepage": "https://trackbridge.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trackbridge/sdk.git"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' build",
+    "dev": "pnpm -r --filter './packages/*' --parallel dev",
+    "test": "pnpm -r --filter './packages/*' test",
+    "test:watch": "pnpm -r --filter './packages/*' --parallel test:watch",
+    "typecheck": "pnpm -r --filter './packages/*' typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish",
+    "clean": "pnpm -r exec rm -rf dist node_modules .turbo && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0",
+    "@types/node": "^22.0.0",
+    "prettier": "^3.3.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=18.17.0"
+  }
+}
