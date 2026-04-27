@@ -1,0 +1,42 @@
+name: Debug npm auth
+
+on:
+  workflow_dispatch:
+
+jobs:
+  whoami:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Inspect token identity and access
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set +e
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
+
+          echo "=== npm whoami ==="
+          npm whoami
+          echo ""
+
+          echo "=== npm profile get (authenticated user details) ==="
+          npm profile get --json | sed 's/.*/  &/'
+          echo ""
+
+          echo "=== npm org ls trackbridge (members + roles, requires admin) ==="
+          npm org ls trackbridge
+          echo ""
+
+          echo "=== npm access list packages @trackbridge (scope packages) ==="
+          npm access list packages @trackbridge
+          echo ""
+
+          echo "=== npm token list (requires the token to be your CIDR-bound primary) ==="
+          npm token list 2>&1 | head -5
+
+          echo ""
+          echo "Done. The token speaks for the user shown by 'whoami'. If 'org ls' fails with 403, the token user is not an admin of the trackbridge org. If 'access list' returns 404, the scope has no published packages yet."
