@@ -25,16 +25,23 @@ jobs:
         with:
           version: 9.12.0
 
+      # No `registry-url` here — that flag makes setup-node write an
+      # .npmrc with `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}`,
+      # and a broken auth line stops npm from falling through to OIDC
+      # (npm interprets it as "auth provided but invalid" instead of
+      # "no auth, try Trusted Publishing").
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: pnpm
-          registry-url: 'https://registry.npmjs.org'
 
       # Trusted Publishing (OIDC) requires npm CLI ≥ 11.5.1.
-      # Node 20 ships with npm 10.x, so upgrade explicitly.
+      # Node 20 ships with npm 10.x, so upgrade explicitly. Print the
+      # version so future failures here are easy to diagnose.
       - name: Upgrade npm to support Trusted Publishing
-        run: npm install -g npm@latest
+        run: |
+          npm install -g npm@latest
+          npm --version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
