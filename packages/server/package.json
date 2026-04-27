@@ -1,6 +1,6 @@
 {
   "name": "@trackbridge/server",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Server-side dual-send conversion tracking for Google Ads and GA4",
   "license": "MIT",
   "homepage": "https://trackbridge.dev",
@@ -20,7 +20,10 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
