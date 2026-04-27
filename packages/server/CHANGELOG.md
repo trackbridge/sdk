@@ -1,5 +1,13 @@
 # @trackbridge/server
 
+## 0.0.3
+
+### Patch Changes
+
+- 6be78e4: chore: smoke-test OIDC trusted publishing pipeline (no functional change)
+- Updated dependencies [6be78e4]
+  - @trackbridge/core@0.0.3
+
 ## 0.0.2
 
 ### Patch Changes
