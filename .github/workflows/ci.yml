@@ -33,11 +33,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Build before typecheck: cross-package consumers (server, browser)
+      # resolve @trackbridge/core via its package.json `types` field, which
+      # points at ./dist/index.d.ts. On a fresh checkout that file does not
+      # exist until core is built, so typecheck must run after build.
+      - name: Build
+        run: pnpm build
+
       - name: Typecheck
         run: pnpm typecheck
 
       - name: Test
         run: pnpm test
-
-      - name: Build
-        run: pnpm build
