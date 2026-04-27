@@ -6,6 +6,11 @@ on:
 
 jobs:
   push-to-docs:
+    # changesets/action creates one GitHub Release per linked package
+    # per cycle — three releases for the same version. Filter to fire
+    # only on the @trackbridge/core release so we get a single docs PR
+    # per release cycle. Update this if the package set changes.
+    if: startsWith(github.event.release.tag_name, '@trackbridge/core@')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout docs repo
