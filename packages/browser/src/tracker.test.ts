@@ -24,9 +24,9 @@ const baseConfig = (overrides: Partial<BrowserTrackerConfig> = {}): BrowserTrack
 describe('createBrowserTracker — config validation', () => {
   test('throws when adsConversionId is missing', () => {
     const { io } = captureIO();
-    expect(() =>
-      createBrowserTracker({ io } as unknown as BrowserTrackerConfig),
-    ).toThrow(/adsConversionId/);
+    expect(() => createBrowserTracker({ io } as unknown as BrowserTrackerConfig)).toThrow(
+      /adsConversionId/,
+    );
   });
 
   test('returns a tracker exposing getClickIdentifiers and updateConsent', () => {
@@ -310,9 +310,7 @@ describe('trackConversion', () => {
 
   test('builds send_to as "{adsConversionId}/{label}"', async () => {
     const { io, gtagCalls } = captureIO();
-    const tracker = createBrowserTracker(
-      baseConfig({ io, adsConversionId: 'AW-12345' }),
-    );
+    const tracker = createBrowserTracker(baseConfig({ io, adsConversionId: 'AW-12345' }));
 
     await tracker.trackConversion({ label: 'AbCdEfGh', transactionId: 'order_1' });
 
@@ -343,9 +341,7 @@ describe('trackConversion', () => {
 
   test('emits a loud warning when auto-generating transactionId (always, regardless of debug)', async () => {
     const { io, generateTransactionId } = captureIO({ transactionId: 'tb_auto-xyz' });
-    const tracker = createBrowserTracker(
-      baseConfig({ io, generateTransactionId, debug: false }),
-    );
+    const tracker = createBrowserTracker(baseConfig({ io, generateTransactionId, debug: false }));
 
     await tracker.trackConversion({ label: 'X' });
 
@@ -884,6 +880,89 @@ describe('setDebug', () => {
     };
     const tracker = createBrowserTracker(baseConfig({ io: failingIO, debug: true }));
 
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockClear();
+
+    tracker.setDebug(false);
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('debugUrlParam (init-time URL override)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  function failingGtagIO(extra: { url?: string } = {}): BrowserIO {
+    return {
+      getUrlSearch: () => extra.url ?? '',
+      getCookieHeader: () => '',
+      writeCookie: () => {},
+      gtag: () => {
+        throw new Error('boom');
+      },
+    };
+  }
+
+  test('default false: ?tb_debug=1 in URL is ignored', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({ io: failingGtagIO({ url: '?tb_debug=1' }), debug: false }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('debugUrlParam: true + ?tb_debug=1 → debug on', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?tb_debug=1' }),
+        debug: false,
+        debugUrlParam: true,
+      }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('debugUrlParam: true + ?tb_debug=0 → debug off, even when config.debug is true', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?tb_debug=0' }),
+        debug: true,
+        debugUrlParam: true,
+      }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('debugUrlParam: true + URL without tb_debug → falls through to config.debug', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?other=1' }),
+        debug: true,
+        debugUrlParam: true,
+      }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('setDebug overrides URL param after init', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?tb_debug=1' }),
+        debug: false,
+        debugUrlParam: true,
+      }),
+    );
+    // Confirm URL turned debug on at init
     await tracker.trackEvent({ name: 'page_view' });
     expect(warnSpy).toHaveBeenCalledTimes(1);
     warnSpy.mockClear();

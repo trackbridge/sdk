@@ -40,8 +40,8 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   const consentMode = config.consentMode ?? 'off';
   const storage = config.clickIdentifierStorage ?? 'cookie';
   const cookieExpiryDays = config.cookieExpiryDays ?? DEFAULT_COOKIE_EXPIRY_DAYS;
-  let debug = config.debug ?? false;
   const io = config.io ?? createDefaultBrowserIO();
+  let debug = resolveInitialDebug(config, io);
   const generateTransactionId =
     config.generateTransactionId ?? (() => `tb_${globalThis.crypto.randomUUID()}`);
 
@@ -237,6 +237,17 @@ function readGaClientId(cookieHeader: string): string | undefined {
     return id;
   }
   return undefined;
+}
+
+function resolveInitialDebug(config: BrowserTrackerConfig, io: BrowserIO): boolean {
+  let debug = config.debug ?? false;
+  if (config.debugUrlParam === true) {
+    const params = new URLSearchParams(io.getUrlSearch());
+    const flag = params.get('tb_debug');
+    if (flag === '1') debug = true;
+    else if (flag === '0') debug = false;
+  }
+  return debug;
 }
 
 function initialConsentState(mode: 'v2' | 'off'): ConsentState {

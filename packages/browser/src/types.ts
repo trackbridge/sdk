@@ -123,6 +123,13 @@ export type BrowserTrackerConfig = {
   /** Default: `90`. */
   cookieExpiryDays?: number;
   debug?: boolean;
+  /**
+   * When `true`, `createBrowserTracker` reads `?tb_debug=1` (or `=0`)
+   * from the URL and overrides `config.debug` for this tracker instance.
+   * Memory-only — does not persist across full page reloads. Default:
+   * `false`.
+   */
+  debugUrlParam?: boolean;
   /** See {@link BrowserIO}. */
   io?: BrowserIO;
   /**
