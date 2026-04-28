@@ -1,6 +1,6 @@
 {
   "name": "@trackbridge/core",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "description": "Shared types, normalization, and hashing for Trackbridge",
   "license": "MIT",
   "homepage": "https://trackbridge.dev",
