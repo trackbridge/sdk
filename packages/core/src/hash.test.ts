@@ -20,7 +20,7 @@ describe('hashSha256', () => {
   });
 
   test('pins the hash of a multi-byte UTF-8 string (café in NFC)', async () => {
-    expect(await hashSha256('café')).toBe(
+    expect(await hashSha256('caf\u00e9')).toBe(
       '850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e',
     );
   });
@@ -55,8 +55,8 @@ describe('hashSha256', () => {
   // string that crosses runtimes must be NFC-normalized first. Use \u
   // escapes so the codepoints are unambiguous regardless of editor settings.
   test('hashes NFC and NFD forms differently (encoding is not the normalizer)', async () => {
-    const composed = 'café'; // U+00E9
-    const decomposed = 'café'; // e + U+0301
+    const composed = 'caf\u00e9'; // U+00E9
+    const decomposed = 'cafe\u0301'; // e + U+0301
     expect(composed).not.toBe(decomposed);
     expect(await hashSha256(composed)).not.toBe(await hashSha256(decomposed));
   });

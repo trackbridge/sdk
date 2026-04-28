@@ -45,15 +45,15 @@ describe('normalizeName', () => {
   // both correct and the lower-risk dual-send choice. Use \u escapes so the
   // composed/decomposed forms are unambiguous regardless of editor settings.
   describe('unicode NFC normalization', () => {
-    const composed = 'José'; // é as single code point (U+00E9)
-    const decomposed = 'José'; // e + combining acute (U+0065 U+0301)
+    const composed = 'Jos\u00e9'; // é as single code point (U+00E9)
+    const decomposed = 'Jose\u0301'; // e + combining acute (U+0065 U+0301)
 
     test('the test inputs really are different strings before normalization', () => {
       expect(composed).not.toBe(decomposed);
     });
 
     test('preserves diacritics in lowercase form', () => {
-      expect(normalizeName('José')).toBe('josé');
+      expect(normalizeName('Jos\u00e9')).toBe('jos\u00e9');
     });
 
     test('produces the same output for composed and decomposed forms', () => {
@@ -61,7 +61,7 @@ describe('normalizeName', () => {
     });
 
     test('outputs the NFC (composed) form', () => {
-      expect(normalizeName(decomposed)).toBe('josé');
+      expect(normalizeName(decomposed)).toBe('jos\u00e9');
     });
 
     test('outputs are byte-identical when UTF-8 encoded', () => {
@@ -69,6 +69,24 @@ describe('normalizeName', () => {
       const a = encoder.encode(normalizeName(composed));
       const b = encoder.encode(normalizeName(decomposed));
       expect(Array.from(a)).toEqual(Array.from(b));
+    });
+  });
+
+  // Locale-aware lowercasing is the canonical dual-send footgun: in a Turkish
+  // locale, `'I'.toLocaleLowerCase('tr')` is `'ı'` (dotless) and
+  // `'İ'.toLocaleLowerCase('tr')` is `'i'`. The normalizer must use the
+  // locale-INDEPENDENT `.toLowerCase()` so browser-vs-server (and any future
+  // server runtime) never diverge on names like AYDIN or İSTANBUL.
+  describe('locale-independent lowercasing', () => {
+    test('lowercases ASCII "I" to "i", not Turkish dotless "ı"', () => {
+      expect(normalizeName('AYDIN')).toBe('aydin');
+    });
+
+    test('lowercases Turkish "İ" via Unicode default (i + combining dot above)', () => {
+      // String.prototype.toLowerCase is required to be locale-independent;
+      // U+0130 maps to U+0069 U+0307 under that mapping. Pinning the exact
+      // codepoint sequence catches any future swap to .toLocaleLowerCase().
+      expect(normalizeName('\u0130STANBUL')).toBe('i\u0307stanbul');
     });
   });
 });

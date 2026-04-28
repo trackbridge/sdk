@@ -15,6 +15,23 @@ const HASH = {
   region_tx: '1b5b9ccb3e8d006a5230de9bda23ff91edc794d4f56410560830b418528e446c',
   postal_78701: '384248b18055777d69403b479d74e10a96ecc6c6dd6f02308684d3d94eaacad1',
   country_US: '9b202ecbc6d45c6d8901d989a918878397a3eb9d00e8f48022fc051b19d21a1d',
+  // Pinning that gmail-style dots and plus-tags survive normalization. If
+  // the SDK ever switches to gmail-aware stripping (jane.doe+promo@gmail.com
+  // → janedoe@gmail.com), this hash changes and the test breaks loudly.
+  email_jane_dot_plus: 'c3374bcfe3572e09f37602e0e179782352c5e117a4a3767824abbaa21bbdef8b',
+} as const;
+
+// Pinned digests for the non-Latin composite — produced by the canonical
+// pipeline (trim → lowercase → NFC → UTF-8 → SHA-256). Same major-bump rule
+// as HASH above: changing any of these diverges every existing user's data.
+const HASH_NON_LATIN = {
+  email_jose_cafe: '68e3b9e62c3ec70609fb2b2fa8d15b8bada9f25a24f7ec3cc6a800f278422e3d',
+  name_jose: 'd994e1d001886fe5b45b1267bd1fa2b752ac50742579bd3dad7b2a2aa0ed6866',
+  name_garcia: 'ad321a21e537233f2cf61e749c48dba9461f84dec289e418ab8f9d73d6c83125',
+  street_cote_dazur: 'eee4f5330bf7043fe06036318fbe97b7f8a9c6b47530e2fdcf0f4e8fd188ed1e',
+  city_sao_paulo: '577abdbf90dadd651458eee7576c6e3684b5c27beabd465cc4bb3c42441b5b38',
+  region_sp: 'be18b85f77fc024db379acf19e8a1ce62307ab7bb1bca395389ecfc2dafaf741',
+  country_BR: 'bbaf8352442730e92c16c5ea6b0ff7cc595c24e02d8e8bfc5fea5a4e0bb0b46b',
 } as const;
 
 describe('hashUserData', () => {
@@ -85,5 +102,112 @@ describe('hashUserData', () => {
     const a = await hashUserData(input);
     const b = await hashUserData(input);
     expect(a).toEqual(b);
+  });
+
+  // Edge-case raw inputs that should all collapse to the same canonical hash
+  // after normalization. These pin the *contract* — that the normalizer +
+  // hasher together produce one digest per logical phone number / email,
+  // regardless of how the user typed it on the page or sent it from the
+  // server. A regression in any normalizer step (whitespace, case folding,
+  // separator stripping, double-plus collapse) breaks one of these.
+  test('phone format variants all collapse to the same canonical hash', async () => {
+    for (const phone of [
+      '+15551234567',
+      '+1 (555) 123-4567',
+      '+1.555.123.4567',
+      '+1-555-123-4567',
+      '++15551234567',
+      '\t+1 555-1234567\n',
+    ]) {
+      expect(await hashUserData({ phone })).toEqual({ phone: HASH.phone_15551234567 });
+    }
+  });
+
+  test('email case and whitespace variants all collapse to the same canonical hash', async () => {
+    for (const email of [
+      'jane@example.com',
+      'JANE@EXAMPLE.COM',
+      'Jane@Example.com',
+      '  jane@example.com  ',
+      '\tJane@Example.COM\n',
+    ]) {
+      expect(await hashUserData({ email })).toEqual({ email: HASH.email_jane });
+    }
+  });
+
+  // Documents the intentional spec deviation: Google's enhanced conversions
+  // guidance is sometimes read as requiring gmail-style local-part
+  // normalization (strip dots, drop +tag). The SDK does NOT do that —
+  // preserving the user's input is the lower-risk choice and matches what
+  // the gtag client side does. If that policy ever changes, this hash moves
+  // and forces an explicit decision rather than a silent breakage.
+  test('preserves dots and plus-tags in the local part (no gmail-style stripping)', async () => {
+    expect(await hashUserData({ email: 'Jane.Doe+promo@example.com' })).toEqual({
+      email: HASH.email_jane_dot_plus,
+    });
+  });
+
+  // The ASCII composite above does not exercise NFC normalization or
+  // case-folding of non-Latin letters end-to-end. The two tests below do —
+  // if any byte of the normalize → NFC → UTF-8 → SHA-256 pipeline changes
+  // for non-ASCII input, these digests diverge.
+  //
+  // Inputs use \u escapes so the codepoint sequence is unambiguous
+  // regardless of how this file is saved on disk. The first test pins NFC
+  // (precomposed) input; the second pins NFD (decomposed) input. They MUST
+  // produce identical digests — that equality is the dual-send invariant.
+  test('hashes a fully populated non-Latin UserData with NFC (precomposed) input', async () => {
+    // NFC codepoints used:
+    //   é = é   ô = ô   ã = ã   í = í
+    const input: UserData = {
+      email: '  José@Café.com ',
+      firstName: 'José',
+      lastName: 'García',
+      address: {
+        street: "Côte d'Azur",
+        city: 'São Paulo',
+        region: 'SP',
+        country: 'br',
+      },
+    };
+    expect(await hashUserData(input)).toEqual({
+      email: HASH_NON_LATIN.email_jose_cafe,
+      firstName: HASH_NON_LATIN.name_jose,
+      lastName: HASH_NON_LATIN.name_garcia,
+      address: {
+        street: HASH_NON_LATIN.street_cote_dazur,
+        city: HASH_NON_LATIN.city_sao_paulo,
+        region: HASH_NON_LATIN.region_sp,
+        country: HASH_NON_LATIN.country_BR,
+      },
+    });
+  });
+
+  test('NFD (decomposed) input produces the same digests as NFC input', async () => {
+    // NFD: each accented letter is base + combining mark.
+    //   ́ = combining acute   ̂ = combining circumflex
+    //   ̃ = combining tilde
+    const input: UserData = {
+      email: '  José@Café.com ',
+      firstName: 'José',
+      lastName: 'García',
+      address: {
+        street: "Côte d'Azur",
+        city: 'São Paulo',
+        region: 'SP',
+        country: 'br',
+      },
+    };
+    expect(await hashUserData(input)).toEqual({
+      email: HASH_NON_LATIN.email_jose_cafe,
+      firstName: HASH_NON_LATIN.name_jose,
+      lastName: HASH_NON_LATIN.name_garcia,
+      address: {
+        street: HASH_NON_LATIN.street_cote_dazur,
+        city: HASH_NON_LATIN.city_sao_paulo,
+        region: HASH_NON_LATIN.region_sp,
+        country: HASH_NON_LATIN.country_BR,
+      },
+    });
   });
 });
