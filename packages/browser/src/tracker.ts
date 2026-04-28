@@ -85,6 +85,9 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     getConsent(): ConsentState {
       return { ...consent };
     },
+    getClientId(): string | undefined {
+      return readGaClientId(io.getCookieHeader());
+    },
     updateConsent(update: ConsentUpdate): void {
       const wasStorageGranted = consent.ad_storage === 'granted';
       if (update.ad_storage !== undefined) consent.ad_storage = update.ad_storage;
@@ -203,6 +206,33 @@ async function buildGtagUserData(input: UserData): Promise<GtagUserData | undefi
   if (Object.keys(addr).length > 0) out.address = addr;
 
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Parses the canonical GA4 client ID from a `document.cookie`-style
+ * header. The `_ga` value format is `GA<major>.<subDomainCount>.<rand>.<ts>`
+ * (see https://developers.google.com/analytics/devguides/collection/analyticsjs/cookies-user-id);
+ * the canonical client ID for Measurement Protocol calls is everything
+ * after the second `.`. Returns `undefined` if the cookie is absent or
+ * malformed. Must NOT match `_ga_<measurementId>` (the GA4 session
+ * cookie).
+ */
+function readGaClientId(cookieHeader: string): string | undefined {
+  if (cookieHeader === '') return undefined;
+  for (const rawPair of cookieHeader.split(';')) {
+    const pair = rawPair.trim();
+    const eqIdx = pair.indexOf('=');
+    if (eqIdx <= 0) continue;
+    if (pair.slice(0, eqIdx) !== '_ga') continue;
+    const value = pair.slice(eqIdx + 1);
+    const firstDot = value.indexOf('.');
+    if (firstDot <= 0) return undefined;
+    const secondDot = value.indexOf('.', firstDot + 1);
+    if (secondDot <= 0) return undefined;
+    const id = value.slice(secondDot + 1);
+    return id === '' ? undefined : id;
+  }
+  return undefined;
 }
 
 function initialConsentState(mode: 'v2' | 'off'): ConsentState {

@@ -785,3 +785,54 @@ describe('getConsent', () => {
     expect(writes).toHaveLength(1);
   });
 });
+
+describe('getClientId', () => {
+  test('returns the canonical clientId from a valid _ga cookie', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1.1.1234567890.9876543210' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBe('1234567890.9876543210');
+  });
+
+  test('returns undefined when the _ga cookie is absent', () => {
+    const { io } = captureIO({ cookies: '_tb_gclid=xyz; _other=1' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('returns undefined for malformed _ga values (no dots)', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('returns undefined for malformed _ga values (only one dot)', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1.1' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('returns undefined when the substring after the second dot is empty', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1.1.' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('does NOT match the GA4 session cookie _ga_<measurementId>', () => {
+    const { io } = captureIO({ cookies: '_ga_G-XXXXXXXXXX=GS1.1.1.1.0.0' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('tolerates leading whitespace and ordering — _ga later in the cookie header', () => {
+    const { io } = captureIO({ cookies: '_other=foo; _ga=GA1.1.111.222' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBe('111.222');
+  });
+});

@@ -142,6 +142,14 @@ export type BrowserTracker = {
    * affect internal state.
    */
   getConsent(): ConsentState;
+  /**
+   * Reads the GA4 `_ga` cookie and returns the canonical client ID
+   * (the substring after `GA<v>.<count>.`). Returns `undefined` if
+   * the cookie is missing or malformed. Synchronous; does NOT await
+   * gtag init, so a fresh page that has not yet fired any gtag hit
+   * may return `undefined`.
+   */
+  getClientId(): string | undefined;
   updateConsent(update: ConsentUpdate): void;
   trackEvent(input: BrowserEventInput): Promise<void>;
   trackConversion(input: BrowserConversionInput): Promise<void>;
