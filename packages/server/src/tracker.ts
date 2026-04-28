@@ -221,7 +221,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
             userId: input.userId ?? envelope.userId,
             params,
             userData: input.userData ?? envelope.userData,
-            consent: (input.consent ?? envelope.consent) as ServerConsent,
+            consent: input.consent ?? envelope.consent,
           });
         },
         async trackConversion(input: BoundServerConversionInput): Promise<ServerConversionResult> {
@@ -231,7 +231,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
             gbraid: input.gbraid ?? envelope.clickIds.gbraid,
             wbraid: input.wbraid ?? envelope.clickIds.wbraid,
             userData: input.userData ?? envelope.userData,
-            consent: (input.consent ?? envelope.consent) as ServerConsent,
+            consent: input.consent ?? envelope.consent,
           });
         },
       };
