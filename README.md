@@ -302,6 +302,42 @@ Trackbridge will not write click identifier cookies when `ad_storage` consent is
 
 ---
 
+## Delayed conversions with the context envelope
+
+When the conversion fires hours or days after the user leaves the page (Stripe webhook, async job, batch payment), the browser is gone — but you can still send a faithful server-side conversion if you captured the right context at checkout. Trackbridge has a built-in helper:
+
+```ts
+// On the browser, at checkout success:
+const envelope = tracker.exportContext({
+  userData: {
+    email: order.email,
+    phone: order.phone,
+  },
+});
+
+await fetch('/api/checkout-complete', {
+  method: 'POST',
+  body: JSON.stringify({ orderId: order.id, envelope }),
+});
+```
+
+```ts
+// On the server, when the webhook fires (hours later):
+const order = await db.orders.findById(orderId);
+const bound = serverTracker.fromContext(order.envelope);
+
+await bound.trackConversion({
+  label: 'purchase',
+  value: order.total,
+  currency: 'USD',
+  transactionId: order.id,
+});
+```
+
+The envelope is plain JSON — persist it on the order/payment row in your database. `fromContext` validates the envelope structure and returns a tracker pre-bound to its `clientId`, `clickIds`, `consent`, `userId`, and `userData`. Per-call inputs override envelope values on conflict (no deep merge), so you can still pass per-call `userData` overrides if your DB has fresher data.
+
+---
+
 ## GA4 events
 
 Conversions are the headline feature, but you'll also want to fire regular GA4 events. Same dual-send pattern, same API shape — browser fires via `gtag`, server fires via the GA4 Measurement Protocol.
