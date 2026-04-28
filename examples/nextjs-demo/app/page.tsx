@@ -65,9 +65,18 @@ export default function Home() {
         }),
       });
 
+      const result = (await response.json()) as {
+        ok: boolean;
+        ads?: { ok: true } | { ok: false; error: string };
+      };
+      const adsStatus = result.ads
+        ? result.ads.ok
+          ? 'Ads OK'
+          : `Ads FAILED: ${result.ads.error}`
+        : 'Ads not configured';
       setStatus(
-        `Fired both sides with transactionId="${orderId}". Server returned ${response.status}. ` +
-          `Check window.dataLayer in DevTools, the Network tab for /api/conversion, and your server logs.`,
+        `Fired both sides with transactionId="${orderId}". Server: HTTP ${response.status}, ${adsStatus}. ` +
+          `Check window.dataLayer in DevTools and the Network tab for /api/conversion.`,
       );
     } catch (err) {
       setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`);

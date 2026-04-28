@@ -106,7 +106,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // userData passes through verbatim; the SDK normalizes + hashes before
   // sending to Google. Same input on browser + server → same hashes.
-  await tracker.trackConversion({
+  //
+  // The server tracker never throws on runtime API failures — it returns a
+  // structured result so the route can surface what actually happened.
+  // This demo always responds 200 (so a checkout flow is never blocked by
+  // tracking) but reports the per-destination outcome in the body. A real
+  // production route can choose to ignore the failures or feed them to
+  // observability.
+  const result = await tracker.trackConversion({
     label: body.label,
     value: body.value,
     currency: body.currency,
@@ -117,5 +124,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     userData: body.userData,
   });
 
-  return NextResponse.json({ ok: true, transactionId: body.orderId });
+  return NextResponse.json({
+    ok: true,
+    transactionId: body.orderId,
+    ads: result.ads.ok ? { ok: true } : { ok: false, error: result.ads.error.message },
+  });
 }

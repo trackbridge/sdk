@@ -120,7 +120,46 @@ export type ServerConversionInput = {
   consent?: ServerConsent;
 };
 
+/**
+ * Per-destination outcome inside a {@link ServerEventResult} or
+ * {@link ServerConversionResult}. `ok: true` means the request reached
+ * Google with a 2xx response; `ok: false` carries the underlying error
+ * (network failure, OAuth refresh failure, or non-2xx response).
+ */
+export type SendResult = { ok: true } | { ok: false; error: Error };
+
+/**
+ * Result of {@link ServerTracker.trackEvent}. Currently a single GA4
+ * destination; structured this way so future destinations (Meta CAPI,
+ * TikTok Events API, etc.) can be added without breaking the contract.
+ */
+export type ServerEventResult = {
+  ga4: SendResult;
+};
+
+/**
+ * Result of {@link ServerTracker.trackConversion}. Currently a single
+ * Ads destination; structured this way so future server-side GA4
+ * conversion events or other destinations can be added without
+ * breaking the contract.
+ */
+export type ServerConversionResult = {
+  ads: SendResult;
+};
+
 export type ServerTracker = {
-  trackEvent(input: ServerEventInput): Promise<void>;
-  trackConversion(input: ServerConversionInput): Promise<void>;
+  /**
+   * Send a GA4 event via the Measurement Protocol. Never throws on
+   * runtime API failures — the result reports per-destination success
+   * via {@link SendResult}. Configuration errors (e.g., missing
+   * required config) throw at {@link createServerTracker} time.
+   */
+  trackEvent(input: ServerEventInput): Promise<ServerEventResult>;
+  /**
+   * Send a Google Ads click conversion. Never throws on runtime API
+   * failures (OAuth refresh, Ads upload, network) — the result reports
+   * per-destination success via {@link SendResult}. Throws only on
+   * caller misuse: missing `ads` config, unknown conversion label.
+   */
+  trackConversion(input: ServerConversionInput): Promise<ServerConversionResult>;
 };
