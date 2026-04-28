@@ -16,10 +16,13 @@ import type {
   BrowserConversionInput,
   BrowserEventInput,
   BrowserIO,
+  BrowserPageViewInput,
   BrowserTracker,
   BrowserTrackerConfig,
   ClickIdentifiers,
+  ConsentState,
   ConsentUpdate,
+  ConsentValue,
 } from './types.js';
 
 const DEFAULT_COOKIE_EXPIRY_DAYS = 90;
@@ -38,17 +41,20 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   const consentMode = config.consentMode ?? 'off';
   const storage = config.clickIdentifierStorage ?? 'cookie';
   const cookieExpiryDays = config.cookieExpiryDays ?? DEFAULT_COOKIE_EXPIRY_DAYS;
-  const debug = config.debug ?? false;
+  const ga4MeasurementId = config.ga4MeasurementId;
   const io = config.io ?? createDefaultBrowserIO();
+  let debug = resolveInitialDebug(config, io);
   const generateTransactionId =
     config.generateTransactionId ?? (() => `tb_${globalThis.crypto.randomUUID()}`);
 
-  let storageGranted = consentMode === 'off';
-  // userData is gated independently of click-id cookies (different
-  // GDPR signal). Default = granted under consentMode 'off', otherwise
-  // denied-until-granted via updateConsent. See CLAUDE.md principle 4.
-  let userDataGranted = consentMode === 'off';
+  // Replace the two-boolean state with a four-key record. The signals
+  // we act on (ad_storage, ad_user_data) drive the same persistence /
+  // PII-gate logic; ad_personalization and analytics_storage are
+  // stored verbatim so banners can read them back via getConsent().
+  let consent: ConsentState = initialConsentState(consentMode);
   let ids: ClickIdentifiers = {};
+  let userId: string | undefined = undefined;
+  let lastPageViewPath: string | undefined = undefined;
 
   if (storage !== 'none') {
     const cookieIds =
@@ -58,7 +64,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   }
 
   const persist = (): void => {
-    if (storage !== 'cookie' || !storageGranted) return;
+    if (storage !== 'cookie' || consent.ad_storage !== 'granted') return;
     if (Object.keys(ids).length === 0) return;
     const cookies = buildClickIdentifierCookieStrings(ids, {
       expiryDays: cookieExpiryDays,
@@ -71,7 +77,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
 
   const maybeSetUserData = async (userData: UserData | undefined): Promise<void> => {
     if (userData === undefined) return;
-    if (!userDataGranted) return;
+    if (consent.ad_user_data !== 'granted') return;
     const built = await buildGtagUserData(userData);
     if (built !== undefined) io.gtag('set', 'user_data', built);
   };
@@ -80,15 +86,24 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     getClickIdentifiers(): ClickIdentifiers {
       return { ...ids };
     },
+    getConsent(): ConsentState {
+      return { ...consent };
+    },
+    getClientId(): string | undefined {
+      return readGaClientId(io.getCookieHeader());
+    },
     updateConsent(update: ConsentUpdate): void {
-      const wasStorageGranted = storageGranted;
-      if (update.ad_storage === 'granted') storageGranted = true;
-      else if (update.ad_storage === 'denied') storageGranted = false;
+      const wasStorageGranted = consent.ad_storage === 'granted';
+      if (update.ad_storage !== undefined) consent.ad_storage = update.ad_storage;
+      if (update.ad_user_data !== undefined) consent.ad_user_data = update.ad_user_data;
+      if (update.ad_personalization !== undefined) {
+        consent.ad_personalization = update.ad_personalization;
+      }
+      if (update.analytics_storage !== undefined) {
+        consent.analytics_storage = update.analytics_storage;
+      }
 
-      if (update.ad_user_data === 'granted') userDataGranted = true;
-      else if (update.ad_user_data === 'denied') userDataGranted = false;
-
-      if (!wasStorageGranted && storageGranted) persist();
+      if (!wasStorageGranted && consent.ad_storage === 'granted') persist();
     },
     async trackEvent(input: BrowserEventInput): Promise<void> {
       try {
@@ -121,6 +136,64 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
         io.gtag('event', 'conversion', params);
       } catch (err) {
         if (debug) console.warn('[trackbridge] gtag conversion failed:', err);
+      }
+    },
+    setDebug(enabled: boolean): void {
+      debug = enabled;
+    },
+    identifyUser(id: string): void {
+      if (ga4MeasurementId === undefined) {
+        if (debug) {
+          console.warn(
+            '[trackbridge] identifyUser called without ga4MeasurementId — no-op',
+          );
+        }
+        return;
+      }
+      userId = id;
+      io.gtag('config', ga4MeasurementId, { user_id: id, send_page_view: false });
+    },
+    clearUser(): void {
+      if (ga4MeasurementId === undefined) {
+        if (debug) {
+          console.warn(
+            '[trackbridge] clearUser called without ga4MeasurementId — no-op',
+          );
+        }
+        return;
+      }
+      userId = undefined;
+      io.gtag('config', ga4MeasurementId, { user_id: undefined, send_page_view: false });
+    },
+    async trackPageView(input?: BrowserPageViewInput): Promise<void> {
+      if (ga4MeasurementId === undefined) {
+        if (debug) {
+          console.warn(
+            '[trackbridge] trackPageView called without ga4MeasurementId — no-op',
+          );
+        }
+        return;
+      }
+      const path = input?.path ?? defaultPath();
+      const title = input?.title ?? defaultTitle();
+      const location = defaultLocation();
+
+      if (path === lastPageViewPath) {
+        if (debug) {
+          console.warn(`[trackbridge] trackPageView deduped repeat for path: ${path}`);
+        }
+        return;
+      }
+      lastPageViewPath = path;
+
+      try {
+        io.gtag('event', 'page_view', {
+          page_path: path,
+          page_title: title,
+          page_location: location,
+        });
+      } catch (err) {
+        if (debug) console.warn('[trackbridge] gtag page_view failed:', err);
       }
     },
   };
@@ -197,6 +270,55 @@ async function buildGtagUserData(input: UserData): Promise<GtagUserData | undefi
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * Parses the canonical GA4 client ID from a `document.cookie`-style
+ * header. The `_ga` value format is `GA<major>.<subDomainCount>.<rand>.<ts>`
+ * (see https://developers.google.com/analytics/devguides/collection/analyticsjs/cookies-user-id);
+ * the canonical client ID for Measurement Protocol calls is everything
+ * after the second `.`. Returns `undefined` if the cookie is absent or
+ * malformed. Must NOT match `_ga_<measurementId>` (the GA4 session
+ * cookie).
+ */
+function readGaClientId(cookieHeader: string): string | undefined {
+  if (cookieHeader === '') return undefined;
+  for (const rawPair of cookieHeader.split(';')) {
+    const pair = rawPair.trim();
+    const eqIdx = pair.indexOf('=');
+    if (eqIdx <= 0) continue;
+    if (pair.slice(0, eqIdx) !== '_ga') continue;
+    const value = pair.slice(eqIdx + 1);
+    const firstDot = value.indexOf('.');
+    if (firstDot <= 0) continue;
+    const secondDot = value.indexOf('.', firstDot + 1);
+    if (secondDot <= 0) continue;
+    const id = value.slice(secondDot + 1);
+    if (id === '') continue;
+    return id;
+  }
+  return undefined;
+}
+
+function resolveInitialDebug(config: BrowserTrackerConfig, io: BrowserIO): boolean {
+  let debug = config.debug ?? false;
+  if (config.debugUrlParam === true) {
+    const params = new URLSearchParams(io.getUrlSearch());
+    const flag = params.get('tb_debug');
+    if (flag === '1') debug = true;
+    else if (flag === '0') debug = false;
+  }
+  return debug;
+}
+
+function initialConsentState(mode: 'v2' | 'off'): ConsentState {
+  const initial: ConsentValue | 'unknown' = mode === 'off' ? 'granted' : 'unknown';
+  return {
+    ad_storage: initial,
+    ad_user_data: initial,
+    ad_personalization: initial,
+    analytics_storage: initial,
+  };
+}
+
 function createDefaultBrowserIO(): BrowserIO {
   return {
     getUrlSearch: () => (typeof window !== 'undefined' ? window.location.search : ''),
@@ -211,4 +333,19 @@ function createDefaultBrowserIO(): BrowserIO {
       w.dataLayer.push(args);
     },
   };
+}
+
+function defaultPath(): string {
+  if (typeof window === 'undefined') return '';
+  return window.location.pathname + window.location.search;
+}
+
+function defaultTitle(): string {
+  if (typeof document === 'undefined') return '';
+  return document.title;
+}
+
+function defaultLocation(): string {
+  if (typeof window === 'undefined') return '';
+  return window.location.href;
 }

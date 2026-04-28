@@ -335,6 +335,29 @@ The `clientId` is the bit most server-side GA4 implementations get wrong — wit
 
 ---
 
+## Browser API quick reference
+
+The `BrowserTracker` returned by `createBrowserTracker` exposes these methods. All are safe to call repeatedly; methods that target GA4 are silent no-ops when `ga4MeasurementId` is not configured (debug mode logs a warning).
+
+| Method | Purpose |
+|---|---|
+| `getClickIdentifiers()` | Returns `{ gclid?, gbraid?, wbraid? }` from cookies / memory. |
+| `getClientId()` | Reads the GA4 `_ga` cookie and returns the canonical clientId. Use to stamp the clientId on a fetch payload to your server for GA4 Measurement Protocol calls. |
+| `getConsent()` | Returns the SDK's view of all four consent signals. Useful for rendering banner toggle states on mount. |
+| `updateConsent(update)` | Updates one or more consent signals. Drives `_tb_*` cookie writes (via `ad_storage`) and PII gating (via `ad_user_data`). |
+| `identifyUser(userId)` | Sets `user_id` for subsequent GA4 events via `gtag('config', …, { user_id, send_page_view: false })`. |
+| `clearUser()` | Clears `user_id`. Same gtag config push with `user_id: undefined`. |
+| `trackEvent(input)` | Fires a GA4 event via gtag. |
+| `trackConversion(input)` | Fires a Google Ads conversion via gtag. |
+| `trackPageView(input?)` | Fires a `page_view` event. Defaults `path` to `window.location.pathname + window.location.search`, `title` to `document.title`. Dedupes consecutive identical paths. |
+| `setDebug(enabled)` | Runtime debug toggle. Overrides whatever was set at init or by the URL param. |
+
+The init flag `debugUrlParam: true` enables an in-URL `?tb_debug=1` (or `?tb_debug=0`) override for the same setting. Memory-only — does not persist across full page reloads.
+
+Note: `identifyUser` and `clearUser` push `gtag('config', …)` with `send_page_view: false` so a login/logout does not auto-fire an unintended page view. If you want a page view fire after login, call `trackPageView()` explicitly.
+
+---
+
 ## What's in the box
 
 | Package | What it does |
@@ -352,6 +375,7 @@ The `clientId` is the bit most server-side GA4 implementations get wrong — wit
 - ✅ Consent Mode v2 — `ad_storage`-gated cookie writes (browser) + `ad_user_data`-gated `userData` sending (browser via `updateConsent`, server via per-call `consent`)
 - ✅ Click identifier auto-capture — `gclid` / `gbraid` / `wbraid` from URL, persisted to `_tb_*` first-party cookies
 - ✅ Debug mode
+- ✅ Browser tracker DX additions — `getClientId()`, `getConsent()`, `identifyUser()` / `clearUser()`, `trackPageView()`, `setDebug()`, plus the `?tb_debug=1` URL toggle (opt-in via `debugUrlParam: true`)
 - 🔜 Cross-domain `_gl` linker (v1.1+)
 - 🔜 Meta CAPI adapter (v1.1+)
 - 🔜 TikTok Events API adapter (v1.1+)

@@ -30,10 +30,31 @@ export type ConsentValue = 'granted' | 'denied';
  * forward-compatibility but do not currently change behavior.
  */
 export type ConsentUpdate = {
-  ad_storage?: ConsentValue;
-  ad_user_data?: ConsentValue;
-  ad_personalization?: ConsentValue;
-  analytics_storage?: ConsentValue;
+  ad_storage?: ConsentValue | 'unknown';
+  ad_user_data?: ConsentValue | 'unknown';
+  ad_personalization?: ConsentValue | 'unknown';
+  analytics_storage?: ConsentValue | 'unknown';
+};
+
+/**
+ * Snapshot of the SDK's consent state, as returned by
+ * {@link BrowserTracker.getConsent}. Mirrors {@link ConsentUpdate}'s
+ * shape, but every signal is required and may be `'unknown'` until the
+ * consumer's CMP has reported a value via {@link BrowserTracker.updateConsent}.
+ *
+ * Under `consentMode: 'off'`, all signals start `'granted'`.
+ * Under `consentMode: 'v2'`, all signals start `'unknown'`.
+ *
+ * The SDK only acts on `ad_storage` (gates `_tb_*` cookie writes) and
+ * `ad_user_data` (gates outbound PII). `ad_personalization` and
+ * `analytics_storage` are stored verbatim from the most recent
+ * `updateConsent` call so banners can read them back.
+ */
+export type ConsentState = {
+  ad_storage: ConsentValue | 'unknown';
+  ad_user_data: ConsentValue | 'unknown';
+  ad_personalization: ConsentValue | 'unknown';
+  analytics_storage: ConsentValue | 'unknown';
 };
 
 /**
@@ -91,6 +112,19 @@ export type BrowserConversionInput = {
   userData?: UserData;
 };
 
+/**
+ * Input for {@link BrowserTracker.trackPageView}. All fields are
+ * optional and default to `window` / `document` reads when omitted
+ * (or `''` when running outside the browser).
+ */
+export type BrowserPageViewInput = {
+  /** Default: `window.location.pathname + window.location.search`. */
+  path?: string;
+  /** Default: `document.title`. */
+  title?: string;
+  // page_location is auto-filled from window.location.href; not configurable.
+};
+
 export type BrowserTrackerConfig = {
   adsConversionId: string;
   ga4MeasurementId?: string;
@@ -102,6 +136,13 @@ export type BrowserTrackerConfig = {
   /** Default: `90`. */
   cookieExpiryDays?: number;
   debug?: boolean;
+  /**
+   * When `true`, `createBrowserTracker` reads `?tb_debug=1` (or `=0`)
+   * from the URL and overrides `config.debug` for this tracker instance.
+   * Memory-only — does not persist across full page reloads. Default:
+   * `false`.
+   */
+  debugUrlParam?: boolean;
   /** See {@link BrowserIO}. */
   io?: BrowserIO;
   /**
@@ -115,7 +156,57 @@ export type BrowserTrackerConfig = {
 
 export type BrowserTracker = {
   getClickIdentifiers(): ClickIdentifiers;
+  /**
+   * Returns a snapshot of the SDK's view of consent across all four
+   * signals. Returns a defensive copy — mutating the result does not
+   * affect internal state.
+   */
+  getConsent(): ConsentState;
+  /**
+   * Reads the GA4 `_ga` cookie and returns the canonical client ID
+   * (the substring after `GA<v>.<count>.`). Returns `undefined` if
+   * the cookie is missing or malformed. Synchronous; does NOT await
+   * gtag init, so a fresh page that has not yet fired any gtag hit
+   * may return `undefined`.
+   */
+  getClientId(): string | undefined;
   updateConsent(update: ConsentUpdate): void;
   trackEvent(input: BrowserEventInput): Promise<void>;
   trackConversion(input: BrowserConversionInput): Promise<void>;
+  /**
+   * Runtime debug toggle. Overrides whatever was set at init or by
+   * the `debugUrlParam`-driven URL override. Most-recent-call wins.
+   */
+  setDebug(enabled: boolean): void;
+  /**
+   * Sets `user_id` for subsequent GA4 events. Pushes
+   * `gtag('config', ga4MeasurementId, { user_id, send_page_view: false })`.
+   * `send_page_view: false` is required to prevent gtag from re-firing
+   * a `page_view` whenever `config` is called.
+   *
+   * No-op if `ga4MeasurementId` is unset (debug-warn under `debug: true`).
+   */
+  identifyUser(userId: string): void;
+  /**
+   * Clears `user_id` for subsequent GA4 events. Pushes
+   * `gtag('config', ga4MeasurementId, { user_id: undefined, send_page_view: false })`.
+   *
+   * No-op if `ga4MeasurementId` is unset (debug-warn under `debug: true`).
+   */
+  clearUser(): void;
+  /**
+   * Fires `gtag('event', 'page_view', …)` for SPA / App Router page
+   * navigations. Defaults `path` to
+   * `window.location.pathname + window.location.search`, `title` to
+   * `document.title`, and always auto-fills `page_location` from
+   * `window.location.href`. SSR-safe — defaults resolve to `''` outside
+   * the browser.
+   *
+   * Dedupes: consecutive calls resolving to the same `page_path` are
+   * no-ops (debug-warn under `debug: true`). Protects against React 18
+   * strict-mode double-mount.
+   *
+   * No-op if `ga4MeasurementId` is unset (debug-warn under `debug: true`).
+   */
+  trackPageView(input?: BrowserPageViewInput): Promise<void>;
 };

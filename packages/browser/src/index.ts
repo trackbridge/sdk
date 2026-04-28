@@ -12,9 +12,11 @@ export type {
   BrowserConversionInput,
   BrowserEventInput,
   BrowserIO,
+  BrowserPageViewInput,
   BrowserTracker,
   BrowserTrackerConfig,
   ClickIdentifiers,
+  ConsentState,
   ConsentUpdate,
   ConsentValue,
 } from './types.js';

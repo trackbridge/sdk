@@ -24,9 +24,9 @@ const baseConfig = (overrides: Partial<BrowserTrackerConfig> = {}): BrowserTrack
 describe('createBrowserTracker — config validation', () => {
   test('throws when adsConversionId is missing', () => {
     const { io } = captureIO();
-    expect(() =>
-      createBrowserTracker({ io } as unknown as BrowserTrackerConfig),
-    ).toThrow(/adsConversionId/);
+    expect(() => createBrowserTracker({ io } as unknown as BrowserTrackerConfig)).toThrow(
+      /adsConversionId/,
+    );
   });
 
   test('returns a tracker exposing getClickIdentifiers and updateConsent', () => {
@@ -310,9 +310,7 @@ describe('trackConversion', () => {
 
   test('builds send_to as "{adsConversionId}/{label}"', async () => {
     const { io, gtagCalls } = captureIO();
-    const tracker = createBrowserTracker(
-      baseConfig({ io, adsConversionId: 'AW-12345' }),
-    );
+    const tracker = createBrowserTracker(baseConfig({ io, adsConversionId: 'AW-12345' }));
 
     await tracker.trackConversion({ label: 'AbCdEfGh', transactionId: 'order_1' });
 
@@ -343,9 +341,7 @@ describe('trackConversion', () => {
 
   test('emits a loud warning when auto-generating transactionId (always, regardless of debug)', async () => {
     const { io, generateTransactionId } = captureIO({ transactionId: 'tb_auto-xyz' });
-    const tracker = createBrowserTracker(
-      baseConfig({ io, generateTransactionId, debug: false }),
-    );
+    const tracker = createBrowserTracker(baseConfig({ io, generateTransactionId, debug: false }));
 
     await tracker.trackConversion({ label: 'X' });
 
@@ -706,5 +702,446 @@ describe('Consent Mode v2 — ad_user_data gates userData sending', () => {
 
     const set = gtagCalls.find((c) => c[0] === 'set' && c[1] === 'user_data');
     expect(set?.[2]).toEqual({ email: HASH.email_jane });
+  });
+});
+
+describe('getConsent', () => {
+  test('consentMode "off" → all four signals start "granted"', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'off' }));
+
+    expect(tracker.getConsent()).toEqual({
+      ad_storage: 'granted',
+      ad_user_data: 'granted',
+      ad_personalization: 'granted',
+      analytics_storage: 'granted',
+    });
+  });
+
+  test('consentMode "v2" → all four signals start "unknown"', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'v2' }));
+
+    expect(tracker.getConsent()).toEqual({
+      ad_storage: 'unknown',
+      ad_user_data: 'unknown',
+      ad_personalization: 'unknown',
+      analytics_storage: 'unknown',
+    });
+  });
+
+  test('updateConsent only changes the signals it specifies', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'v2' }));
+
+    tracker.updateConsent({ ad_storage: 'granted' });
+    expect(tracker.getConsent()).toEqual({
+      ad_storage: 'granted',
+      ad_user_data: 'unknown',
+      ad_personalization: 'unknown',
+      analytics_storage: 'unknown',
+    });
+  });
+
+  test('updateConsent stores ad_personalization and analytics_storage verbatim', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'v2' }));
+
+    tracker.updateConsent({ ad_personalization: 'denied', analytics_storage: 'granted' });
+    const c = tracker.getConsent();
+    expect(c.ad_personalization).toBe('denied');
+    expect(c.analytics_storage).toBe('granted');
+    // The two we don't act on are stored — but the two we DO act on remain unknown.
+    expect(c.ad_storage).toBe('unknown');
+    expect(c.ad_user_data).toBe('unknown');
+  });
+
+  test('returns a defensive copy — mutating it does not affect the next read', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'off' }));
+
+    const first = tracker.getConsent();
+    first.ad_storage = 'denied';
+
+    expect(tracker.getConsent().ad_storage).toBe('granted');
+  });
+
+  test('round-trip: tracker.updateConsent(tracker.getConsent()) is idempotent', () => {
+    const { io, writes } = captureIO({ url: '?gclid=abc' });
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'v2' }));
+
+    tracker.updateConsent({ ad_storage: 'granted', ad_user_data: 'granted' });
+    expect(writes).toHaveLength(1);
+
+    // Read state, write it back — should not produce additional cookie writes
+    // and should not change the visible consent state.
+    const before = tracker.getConsent();
+    tracker.updateConsent(before);
+    expect(tracker.getConsent()).toEqual(before);
+    expect(writes).toHaveLength(1);
+  });
+});
+
+describe('getClientId', () => {
+  test('returns the canonical clientId from a valid _ga cookie', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1.1.1234567890.9876543210' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBe('1234567890.9876543210');
+  });
+
+  test('returns undefined when the _ga cookie is absent', () => {
+    const { io } = captureIO({ cookies: '_tb_gclid=xyz; _other=1' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('returns undefined for malformed _ga values (no dots)', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('returns undefined for malformed _ga values (only one dot)', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1.1' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('returns undefined when the substring after the second dot is empty', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1.1.' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('does NOT match the GA4 session cookie _ga_<measurementId>', () => {
+    const { io } = captureIO({ cookies: '_ga_G-XXXXXXXXXX=GS1.1.1.1.0.0' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBeUndefined();
+  });
+
+  test('tolerates leading whitespace and ordering — _ga later in the cookie header', () => {
+    const { io } = captureIO({ cookies: '_other=foo; _ga=GA1.1.111.222' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBe('111.222');
+  });
+
+  test('skips a malformed _ga and continues to a later valid one in the same header', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1; _ga=GA1.1.111.222' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBe('111.222');
+  });
+});
+
+describe('setDebug', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  test('toggling debug to true makes a failing gtag call produce a warn', async () => {
+    const failingIO: BrowserIO = {
+      getUrlSearch: () => '',
+      getCookieHeader: () => '',
+      writeCookie: () => {},
+      gtag: () => {
+        throw new Error('boom');
+      },
+    };
+    const tracker = createBrowserTracker(baseConfig({ io: failingIO, debug: false }));
+
+    // Confirm baseline: no warn at debug:false
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    tracker.setDebug(true);
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('toggling debug to false silences subsequent warns', async () => {
+    const failingIO: BrowserIO = {
+      getUrlSearch: () => '',
+      getCookieHeader: () => '',
+      writeCookie: () => {},
+      gtag: () => {
+        throw new Error('boom');
+      },
+    };
+    const tracker = createBrowserTracker(baseConfig({ io: failingIO, debug: true }));
+
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockClear();
+
+    tracker.setDebug(false);
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('debugUrlParam (init-time URL override)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  function failingGtagIO(extra: { url?: string } = {}): BrowserIO {
+    return {
+      getUrlSearch: () => extra.url ?? '',
+      getCookieHeader: () => '',
+      writeCookie: () => {},
+      gtag: () => {
+        throw new Error('boom');
+      },
+    };
+  }
+
+  test('default false: ?tb_debug=1 in URL is ignored', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({ io: failingGtagIO({ url: '?tb_debug=1' }), debug: false }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('debugUrlParam: true + ?tb_debug=1 → debug on', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?tb_debug=1' }),
+        debug: false,
+        debugUrlParam: true,
+      }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('debugUrlParam: true + ?tb_debug=0 → debug off, even when config.debug is true', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?tb_debug=0' }),
+        debug: true,
+        debugUrlParam: true,
+      }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('debugUrlParam: true + URL without tb_debug → falls through to config.debug', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?other=1' }),
+        debug: true,
+        debugUrlParam: true,
+      }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('debugUrlParam: true + ?tb_debug=foo (unexpected value) → falls through to config.debug', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?tb_debug=foo' }),
+        debug: true,
+        debugUrlParam: true,
+      }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('setDebug overrides URL param after init', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?tb_debug=1' }),
+        debug: false,
+        debugUrlParam: true,
+      }),
+    );
+    // Confirm URL turned debug on at init
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockClear();
+
+    tracker.setDebug(false);
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('identifyUser / clearUser', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  test('with ga4MeasurementId set, identifyUser pushes a gtag config call with user_id and send_page_view: false', () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-XXXXXXXXXX' }));
+
+    tracker.identifyUser('u_123');
+
+    expect(gtagCalls).toContainEqual([
+      'config',
+      'G-XXXXXXXXXX',
+      { user_id: 'u_123', send_page_view: false },
+    ]);
+  });
+
+  test('clearUser pushes a gtag config call with user_id: undefined and send_page_view: false', () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-XXXXXXXXXX' }));
+
+    tracker.clearUser();
+
+    expect(gtagCalls).toContainEqual([
+      'config',
+      'G-XXXXXXXXXX',
+      { user_id: undefined, send_page_view: false },
+    ]);
+  });
+
+  test('without ga4MeasurementId, identifyUser is a no-op (no gtag call)', () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    tracker.identifyUser('u_123');
+
+    expect(gtagCalls.find((c) => c[0] === 'config')).toBeUndefined();
+  });
+
+  test('without ga4MeasurementId and debug: true, identifyUser warns', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, debug: true }));
+
+    tracker.identifyUser('u_123');
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0]?.[0])).toMatch(/identifyUser/);
+  });
+
+  test('without ga4MeasurementId and debug: false, identifyUser is silent', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    tracker.identifyUser('u_123');
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('without ga4MeasurementId, clearUser is a no-op and silent at debug: false', () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    tracker.clearUser();
+
+    expect(gtagCalls.find((c) => c[0] === 'config')).toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('trackPageView', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  test('with explicit input, fires gtag page_view with the supplied path/title and SSR-safe location', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-X' }));
+
+    await tracker.trackPageView({ path: '/manual', title: 'Manual' });
+
+    const ev = gtagCalls.find((c) => c[0] === 'event' && c[1] === 'page_view');
+    expect(ev).toBeDefined();
+    expect(ev?.[2]).toEqual({
+      page_path: '/manual',
+      page_title: 'Manual',
+      page_location: '', // SSR-shaped — there is no real window in vitest's node env
+    });
+  });
+
+  test('dedupes consecutive identical paths — second call is a no-op', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-X' }));
+
+    await tracker.trackPageView({ path: '/x' });
+    await tracker.trackPageView({ path: '/x' });
+
+    expect(gtagCalls.filter((c) => c[1] === 'page_view')).toHaveLength(1);
+  });
+
+  test('different paths fire; coming back to a previous path also fires', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-X' }));
+
+    await tracker.trackPageView({ path: '/x' });
+    await tracker.trackPageView({ path: '/y' });
+    await tracker.trackPageView({ path: '/x' });
+
+    expect(gtagCalls.filter((c) => c[1] === 'page_view')).toHaveLength(3);
+  });
+
+  test('debug-warn fires on a deduped repeat under debug: true', async () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(
+      baseConfig({ io, ga4MeasurementId: 'G-X', debug: true }),
+    );
+
+    await tracker.trackPageView({ path: '/x' });
+    await tracker.trackPageView({ path: '/x' });
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0]?.[0])).toMatch(/deduped/);
+  });
+
+  test('without ga4MeasurementId, trackPageView is a no-op (no gtag call)', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    await tracker.trackPageView({ path: '/x' });
+
+    expect(gtagCalls.find((c) => c[1] === 'page_view')).toBeUndefined();
+  });
+
+  test('without ga4MeasurementId, debug: true emits a warn; debug: false silent', async () => {
+    const { io } = captureIO();
+    const trackerDebug = createBrowserTracker(baseConfig({ io, debug: true }));
+    await trackerDebug.trackPageView({ path: '/x' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockClear();
+
+    const trackerSilent = createBrowserTracker(baseConfig({ io }));
+    await trackerSilent.trackPageView({ path: '/x' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('returns Promise<void>', async () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-X' }));
+
+    await expect(tracker.trackPageView({ path: '/x' })).resolves.toBeUndefined();
   });
 });
