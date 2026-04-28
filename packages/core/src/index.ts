@@ -18,6 +18,7 @@ export type {
   ConsentValue,
   HashedAddress,
   HashedUserData,
+  TrackbridgeContext,
   UserData,
 } from './types.js';
 export { hashSha256 } from './hash.js';

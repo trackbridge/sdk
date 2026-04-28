@@ -95,3 +95,34 @@ export type ConsentState = {
   ad_personalization: ConsentValue | 'unknown';
   analytics_storage: ConsentValue | 'unknown';
 };
+
+/**
+ * Serializable envelope capturing the browser tracker's identity,
+ * attribution, consent, and (optionally) PII at a moment in time.
+ *
+ * Round-trips through `JSON.stringify`/`JSON.parse` losslessly.
+ * Consumers persist this on a row in their database (e.g. a Payment
+ * record) at checkout time, then hydrate it into a server-side
+ * tracker call hours later when the webhook fires via
+ * `serverTracker.fromContext(envelope)`.
+ *
+ * Versioned via `v`. Server-side `fromContext` throws on unknown
+ * versions — envelopes are opaque payloads, not user-editable.
+ */
+export type TrackbridgeContext = {
+  v: 1;
+  /** Unix timestamp (ms) at envelope creation. Diagnostic / staleness signal. */
+  createdAt: number;
+  /** GA4 client ID — `_ga` cookie's third+fourth dot-segments. */
+  clientId?: string;
+  /** GA4 session ID — `_ga_<containerId>` cookie's third dot-segment. */
+  sessionId?: string;
+  /** Set if the consumer called `tracker.identifyUser(id)` before exporting. */
+  userId?: string;
+  /** Captured automatically by the browser tracker from URL params + first-party cookies. */
+  clickIds: { gclid?: string; gbraid?: string; wbraid?: string };
+  /** Snapshot of consent at envelope-creation time. */
+  consent: ConsentState;
+  /** Caller-supplied via `exportContext({ userData })`. Pre-normalize, pre-hash pass-through. */
+  userData?: UserData;
+};
