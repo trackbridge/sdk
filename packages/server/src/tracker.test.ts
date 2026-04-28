@@ -848,6 +848,36 @@ describe('fromContext — envelope validation', () => {
     expect(typeof bound.trackEvent).toBe('function');
     expect(typeof bound.trackConversion).toBe('function');
   });
+
+  test('bound tracker works when fromContext is destructured (no this-binding)', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const { fromContext } = tracker;
+    const bound = fromContext(validEnvelope());
+
+    await bound.trackEvent({ name: 'page_view' });
+    expect((calls[0]!.body as Record<string, unknown>).client_id).toBe('111.222');
+  });
+
+  test('mutating the envelope after fromContext does not affect the bound tracker', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const env = validEnvelope();
+    const bound = tracker.fromContext(env);
+
+    // Mutate the original envelope after binding.
+    env.clientId = 'tampered.999';
+    if (env.consent) env.consent.ad_user_data = 'denied';
+    if (env.clickIds) env.clickIds.gclid = 'tampered-click';
+
+    await bound.trackEvent({ name: 'page_view' });
+
+    // The bound tracker should still see the original values from when fromContext was called.
+    const body = calls[0]!.body as Record<string, unknown>;
+    expect(body.client_id).toBe('111.222');
+    // user_data still flows because envelope's original consent was 'granted'.
+    // (Asserting only the specific fields we care about; userData hashing test is elsewhere.)
+  });
 });
 
 describe('ContextBoundServerTracker.trackEvent', () => {

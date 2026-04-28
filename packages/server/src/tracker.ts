@@ -82,7 +82,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
     });
   }
 
-  return {
+  const tracker: ServerTracker = {
     async trackEvent(input: ServerEventInput): Promise<ServerEventResult> {
       const url = new URL(GA4_MP_ENDPOINT);
       url.searchParams.set('measurement_id', config.ga4MeasurementId);
@@ -201,10 +201,14 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
       if (typeof envelope.consent !== 'object' || envelope.consent === null) {
         throw new Error('[trackbridge] fromContext: envelope.consent must be an object');
       }
-      const self = this;
+      // Snapshot the envelope so post-bind mutations by the caller don't
+      // affect the bound tracker. Common pattern: persist envelope on a row,
+      // hydrate later — without this, mutating the hydrated object after
+      // fromContext returns would silently change subsequent sends.
+      const env: TrackbridgeContext = structuredClone(envelope);
       return {
         async trackEvent(input: BoundServerEventInput): Promise<ServerEventResult> {
-          const clientId = input.clientId ?? envelope.clientId;
+          const clientId = input.clientId ?? env.clientId;
           if (clientId === undefined) {
             throw new Error(
               '[trackbridge] fromContext-bound trackEvent called without clientId — ' +
@@ -212,31 +216,32 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
             );
           }
           let params = input.params;
-          if (envelope.sessionId !== undefined && params?.session_id === undefined) {
-            params = { ...(params ?? {}), session_id: envelope.sessionId };
+          if (env.sessionId !== undefined && params?.session_id === undefined) {
+            params = { ...(params ?? {}), session_id: env.sessionId };
           }
-          return self.trackEvent({
+          return tracker.trackEvent({
             name: input.name,
             clientId,
-            userId: input.userId ?? envelope.userId,
+            userId: input.userId ?? env.userId,
             params,
-            userData: input.userData ?? envelope.userData,
-            consent: input.consent ?? envelope.consent,
+            userData: input.userData ?? env.userData,
+            consent: input.consent ?? env.consent,
           });
         },
         async trackConversion(input: BoundServerConversionInput): Promise<ServerConversionResult> {
-          return self.trackConversion({
+          return tracker.trackConversion({
             ...input,
-            gclid: input.gclid ?? envelope.clickIds.gclid,
-            gbraid: input.gbraid ?? envelope.clickIds.gbraid,
-            wbraid: input.wbraid ?? envelope.clickIds.wbraid,
-            userData: input.userData ?? envelope.userData,
-            consent: input.consent ?? envelope.consent,
+            gclid: input.gclid ?? env.clickIds.gclid,
+            gbraid: input.gbraid ?? env.clickIds.gbraid,
+            wbraid: input.wbraid ?? env.clickIds.wbraid,
+            userData: input.userData ?? env.userData,
+            consent: input.consent ?? env.consent,
           });
         },
       };
     },
   };
+  return tracker;
 }
 
 function warnAutoTransactionId(id: string): void {
