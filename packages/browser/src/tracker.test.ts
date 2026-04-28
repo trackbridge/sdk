@@ -954,6 +954,18 @@ describe('debugUrlParam (init-time URL override)', () => {
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
+  test('debugUrlParam: true + ?tb_debug=foo (unexpected value) → falls through to config.debug', async () => {
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io: failingGtagIO({ url: '?tb_debug=foo' }),
+        debug: true,
+        debugUrlParam: true,
+      }),
+    );
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
   test('setDebug overrides URL param after init', async () => {
     const tracker = createBrowserTracker(
       baseConfig({
