@@ -16,6 +16,7 @@ import type {
   BrowserConversionInput,
   BrowserEventInput,
   BrowserIO,
+  BrowserPageViewInput,
   BrowserTracker,
   BrowserTrackerConfig,
   ClickIdentifiers,
@@ -53,6 +54,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   let consent: ConsentState = initialConsentState(consentMode);
   let ids: ClickIdentifiers = {};
   let userId: string | undefined = undefined;
+  let lastPageViewPath: string | undefined = undefined;
 
   if (storage !== 'none') {
     const cookieIds =
@@ -162,6 +164,37 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
       }
       userId = undefined;
       io.gtag('config', ga4MeasurementId, { user_id: undefined, send_page_view: false });
+    },
+    async trackPageView(input?: BrowserPageViewInput): Promise<void> {
+      if (ga4MeasurementId === undefined) {
+        if (debug) {
+          console.warn(
+            '[trackbridge] trackPageView called without ga4MeasurementId — no-op',
+          );
+        }
+        return;
+      }
+      const path = input?.path ?? defaultPath();
+      const title = input?.title ?? defaultTitle();
+      const location = defaultLocation();
+
+      if (path === lastPageViewPath) {
+        if (debug) {
+          console.warn(`[trackbridge] trackPageView deduped repeat for path: ${path}`);
+        }
+        return;
+      }
+      lastPageViewPath = path;
+
+      try {
+        io.gtag('event', 'page_view', {
+          page_path: path,
+          page_title: title,
+          page_location: location,
+        });
+      } catch (err) {
+        if (debug) console.warn('[trackbridge] gtag page_view failed:', err);
+      }
     },
   };
 }
@@ -300,4 +333,19 @@ function createDefaultBrowserIO(): BrowserIO {
       w.dataLayer.push(args);
     },
   };
+}
+
+function defaultPath(): string {
+  if (typeof window === 'undefined') return '';
+  return window.location.pathname + window.location.search;
+}
+
+function defaultTitle(): string {
+  if (typeof document === 'undefined') return '';
+  return document.title;
+}
+
+function defaultLocation(): string {
+  if (typeof window === 'undefined') return '';
+  return window.location.href;
 }

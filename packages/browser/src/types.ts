@@ -112,6 +112,19 @@ export type BrowserConversionInput = {
   userData?: UserData;
 };
 
+/**
+ * Input for {@link BrowserTracker.trackPageView}. All fields are
+ * optional and default to `window` / `document` reads when omitted
+ * (or `''` when running outside the browser).
+ */
+export type BrowserPageViewInput = {
+  /** Default: `window.location.pathname + window.location.search`. */
+  path?: string;
+  /** Default: `document.title`. */
+  title?: string;
+  // page_location is auto-filled from window.location.href; not configurable.
+};
+
 export type BrowserTrackerConfig = {
   adsConversionId: string;
   ga4MeasurementId?: string;
@@ -181,4 +194,19 @@ export type BrowserTracker = {
    * No-op if `ga4MeasurementId` is unset (debug-warn under `debug: true`).
    */
   clearUser(): void;
+  /**
+   * Fires `gtag('event', 'page_view', …)` for SPA / App Router page
+   * navigations. Defaults `path` to
+   * `window.location.pathname + window.location.search`, `title` to
+   * `document.title`, and always auto-fills `page_location` from
+   * `window.location.href`. SSR-safe — defaults resolve to `''` outside
+   * the browser.
+   *
+   * Dedupes: consecutive calls resolving to the same `page_path` are
+   * no-ops (debug-warn under `debug: true`). Protects against React 18
+   * strict-mode double-mount.
+   *
+   * No-op if `ga4MeasurementId` is unset (debug-warn under `debug: true`).
+   */
+  trackPageView(input?: BrowserPageViewInput): Promise<void>;
 };

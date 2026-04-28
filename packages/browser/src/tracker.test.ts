@@ -1058,3 +1058,90 @@ describe('identifyUser / clearUser', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('trackPageView', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  test('with explicit input, fires gtag page_view with the supplied path/title and SSR-safe location', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-X' }));
+
+    await tracker.trackPageView({ path: '/manual', title: 'Manual' });
+
+    const ev = gtagCalls.find((c) => c[0] === 'event' && c[1] === 'page_view');
+    expect(ev).toBeDefined();
+    expect(ev?.[2]).toEqual({
+      page_path: '/manual',
+      page_title: 'Manual',
+      page_location: '', // SSR-shaped — there is no real window in vitest's node env
+    });
+  });
+
+  test('dedupes consecutive identical paths — second call is a no-op', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-X' }));
+
+    await tracker.trackPageView({ path: '/x' });
+    await tracker.trackPageView({ path: '/x' });
+
+    expect(gtagCalls.filter((c) => c[1] === 'page_view')).toHaveLength(1);
+  });
+
+  test('different paths fire; coming back to a previous path also fires', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-X' }));
+
+    await tracker.trackPageView({ path: '/x' });
+    await tracker.trackPageView({ path: '/y' });
+    await tracker.trackPageView({ path: '/x' });
+
+    expect(gtagCalls.filter((c) => c[1] === 'page_view')).toHaveLength(3);
+  });
+
+  test('debug-warn fires on a deduped repeat under debug: true', async () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(
+      baseConfig({ io, ga4MeasurementId: 'G-X', debug: true }),
+    );
+
+    await tracker.trackPageView({ path: '/x' });
+    await tracker.trackPageView({ path: '/x' });
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0]?.[0])).toMatch(/deduped/);
+  });
+
+  test('without ga4MeasurementId, trackPageView is a no-op (no gtag call)', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    await tracker.trackPageView({ path: '/x' });
+
+    expect(gtagCalls.find((c) => c[1] === 'page_view')).toBeUndefined();
+  });
+
+  test('without ga4MeasurementId, debug: true emits a warn; debug: false silent', async () => {
+    const { io } = captureIO();
+    const trackerDebug = createBrowserTracker(baseConfig({ io, debug: true }));
+    await trackerDebug.trackPageView({ path: '/x' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockClear();
+
+    const trackerSilent = createBrowserTracker(baseConfig({ io }));
+    await trackerSilent.trackPageView({ path: '/x' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('returns Promise<void>', async () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-X' }));
+
+    await expect(tracker.trackPageView({ path: '/x' })).resolves.toBeUndefined();
+  });
+});
