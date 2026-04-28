@@ -153,4 +153,9 @@ export type BrowserTracker = {
   updateConsent(update: ConsentUpdate): void;
   trackEvent(input: BrowserEventInput): Promise<void>;
   trackConversion(input: BrowserConversionInput): Promise<void>;
+  /**
+   * Runtime debug toggle. Overrides whatever was set at init or by
+   * the `debugUrlParam`-driven URL override. Most-recent-call wins.
+   */
+  setDebug(enabled: boolean): void;
 };

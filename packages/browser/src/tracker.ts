@@ -40,7 +40,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   const consentMode = config.consentMode ?? 'off';
   const storage = config.clickIdentifierStorage ?? 'cookie';
   const cookieExpiryDays = config.cookieExpiryDays ?? DEFAULT_COOKIE_EXPIRY_DAYS;
-  const debug = config.debug ?? false;
+  let debug = config.debug ?? false;
   const io = config.io ?? createDefaultBrowserIO();
   const generateTransactionId =
     config.generateTransactionId ?? (() => `tb_${globalThis.crypto.randomUUID()}`);
@@ -133,6 +133,9 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
       } catch (err) {
         if (debug) console.warn('[trackbridge] gtag conversion failed:', err);
       }
+    },
+    setDebug(enabled: boolean): void {
+      debug = enabled;
     },
   };
 }

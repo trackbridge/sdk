@@ -843,3 +843,53 @@ describe('getClientId', () => {
     expect(tracker.getClientId()).toBe('111.222');
   });
 });
+
+describe('setDebug', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  test('toggling debug to true makes a failing gtag call produce a warn', async () => {
+    const failingIO: BrowserIO = {
+      getUrlSearch: () => '',
+      getCookieHeader: () => '',
+      writeCookie: () => {},
+      gtag: () => {
+        throw new Error('boom');
+      },
+    };
+    const tracker = createBrowserTracker(baseConfig({ io: failingIO, debug: false }));
+
+    // Confirm baseline: no warn at debug:false
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    tracker.setDebug(true);
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('toggling debug to false silences subsequent warns', async () => {
+    const failingIO: BrowserIO = {
+      getUrlSearch: () => '',
+      getCookieHeader: () => '',
+      writeCookie: () => {},
+      gtag: () => {
+        throw new Error('boom');
+      },
+    };
+    const tracker = createBrowserTracker(baseConfig({ io: failingIO, debug: true }));
+
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockClear();
+
+    tracker.setDebug(false);
+    await tracker.trackEvent({ name: 'page_view' });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
