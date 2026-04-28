@@ -9,7 +9,10 @@ export const VERSION = '0.0.1';
 
 export { createServerTracker } from './tracker.js';
 export type {
+  BoundServerConversionInput,
+  BoundServerEventInput,
   ConsentValue,
+  ContextBoundServerTracker,
   SendResult,
   ServerAdsConfig,
   ServerConsent,
@@ -20,3 +23,4 @@ export type {
   ServerTracker,
   ServerTrackerConfig,
 } from './types.js';
+export type { TrackbridgeContext } from '@trackbridge/core';
