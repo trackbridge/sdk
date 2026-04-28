@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type { TrackbridgeContext } from '@trackbridge/core';
+
 import { createServerTracker } from './tracker.js';
 import type { ServerAdsConfig, ServerTrackerConfig } from './types.js';
 
@@ -23,6 +25,22 @@ function captureFetch(response: Response = new Response(null, { status: 204 })) 
 const validConfig = (overrides: Partial<ServerTrackerConfig> = {}): ServerTrackerConfig => ({
   ga4MeasurementId: 'G-TESTING',
   ga4ApiSecret: 'secret-123',
+  ...overrides,
+});
+
+const validEnvelope = (overrides: Partial<TrackbridgeContext> = {}): TrackbridgeContext => ({
+  v: 1,
+  createdAt: 1700000000000,
+  clientId: '111.222',
+  sessionId: '555',
+  userId: 'u_xyz',
+  clickIds: { gclid: 'ad-click-abc' },
+  consent: {
+    ad_storage: 'granted',
+    ad_user_data: 'granted',
+    ad_personalization: 'granted',
+    analytics_storage: 'granted',
+  },
   ...overrides,
 });
 
@@ -787,5 +805,295 @@ describe('trackConversion (server-side via Google Ads API)', () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+describe('fromContext — envelope validation', () => {
+  test('throws on null envelope', () => {
+    const { fn } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    expect(() => tracker.fromContext(null as unknown as TrackbridgeContext)).toThrow(
+      /must be an object/,
+    );
+  });
+
+  test('throws on unknown version (v: 2)', () => {
+    const { fn } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    expect(() =>
+      tracker.fromContext({ ...validEnvelope(), v: 2 as unknown as 1 }),
+    ).toThrow(/unknown envelope version v=2/);
+  });
+
+  test('throws when clickIds is missing', () => {
+    const { fn } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const env = validEnvelope();
+    delete (env as Partial<TrackbridgeContext>).clickIds;
+    expect(() => tracker.fromContext(env)).toThrow(/clickIds must be an object/);
+  });
+
+  test('throws when consent is missing', () => {
+    const { fn } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const env = validEnvelope();
+    delete (env as Partial<TrackbridgeContext>).consent;
+    expect(() => tracker.fromContext(env)).toThrow(/consent must be an object/);
+  });
+
+  test('valid envelope returns a ContextBoundServerTracker with both methods', () => {
+    const { fn } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const bound = tracker.fromContext(validEnvelope());
+    expect(typeof bound.trackEvent).toBe('function');
+    expect(typeof bound.trackConversion).toBe('function');
+  });
+});
+
+describe('ContextBoundServerTracker.trackEvent', () => {
+  test('uses envelope.clientId when input omits it', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const bound = tracker.fromContext(validEnvelope());
+
+    await bound.trackEvent({ name: 'page_view' });
+    expect((calls[0]!.body as Record<string, unknown>).client_id).toBe('111.222');
+  });
+
+  test('per-call clientId overrides envelope.clientId', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const bound = tracker.fromContext(validEnvelope());
+
+    await bound.trackEvent({ name: 'page_view', clientId: 'override.999' });
+    expect((calls[0]!.body as Record<string, unknown>).client_id).toBe('override.999');
+  });
+
+  test('throws when neither envelope nor input supplies clientId', async () => {
+    const { fn } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const env = validEnvelope();
+    delete env.clientId;
+    const bound = tracker.fromContext(env);
+
+    await expect(bound.trackEvent({ name: 'page_view' })).rejects.toThrow(
+      /fromContext-bound trackEvent called without clientId/,
+    );
+  });
+
+  test('uses envelope.userId for MP body user_id', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const bound = tracker.fromContext(validEnvelope());
+
+    await bound.trackEvent({ name: 'page_view' });
+    expect((calls[0]!.body as Record<string, unknown>).user_id).toBe('u_xyz');
+  });
+
+  test('per-call userId overrides envelope.userId', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const bound = tracker.fromContext(validEnvelope());
+
+    await bound.trackEvent({ name: 'page_view', userId: 'override_user' });
+    expect((calls[0]!.body as Record<string, unknown>).user_id).toBe('override_user');
+  });
+
+  test('injects envelope.sessionId into params.session_id', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const bound = tracker.fromContext(validEnvelope());
+
+    await bound.trackEvent({ name: 'page_view' });
+    const events = (calls[0]!.body as { events: { params: Record<string, unknown> }[] }).events;
+    expect(events[0]!.params.session_id).toBe('555');
+  });
+
+  test('per-call params.session_id overrides envelope.sessionId', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const bound = tracker.fromContext(validEnvelope());
+
+    await bound.trackEvent({ name: 'page_view', params: { session_id: 'override_sess' } });
+    const events = (calls[0]!.body as { events: { params: Record<string, unknown> }[] }).events;
+    expect(events[0]!.params.session_id).toBe('override_sess');
+  });
+
+  test('per-call userData overrides envelope.userData', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const bound = tracker.fromContext(
+      validEnvelope({ userData: { email: 'envelope@example.com' } }),
+    );
+
+    await bound.trackEvent({
+      name: 'login',
+      userData: { email: 'override@example.com' },
+    });
+    const body = calls[0]!.body as Record<string, unknown>;
+    expect(body.user_data).toBeDefined();
+  });
+});
+
+describe('ContextBoundServerTracker.trackConversion', () => {
+  const adsConfig: ServerAdsConfig = {
+    developerToken: 'dev-token',
+    customerId: '1234567890',
+    refreshToken: 'refresh-token',
+    clientId: 'oauth-client',
+    clientSecret: 'oauth-secret',
+    conversionActions: { purchase: 'customers/1234567890/conversionActions/9876543210' },
+  };
+
+  function trackerWithAds() {
+    const calls: FetchCall[] = [];
+    const fn: typeof globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const isOauth = url.includes('oauth2');
+      const headerEntries = init?.headers ? Object.entries(init.headers) : [];
+      calls.push({
+        url,
+        method: init?.method ?? 'GET',
+        headers: Object.fromEntries(headerEntries) as Record<string, string>,
+        body:
+          typeof init?.body === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse(init.body);
+                } catch {
+                  return init.body;
+                }
+              })()
+            : init?.body,
+      });
+      if (isOauth) {
+        return new Response(JSON.stringify({ access_token: 'tok', expires_in: 3600 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ partialFailureError: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+    return {
+      tracker: createServerTracker(validConfig({ fetch: fn, ads: adsConfig })),
+      calls,
+    };
+  }
+
+  test('maps envelope.clickIds.gclid into the Ads conversion gclid field', async () => {
+    const { tracker, calls } = trackerWithAds();
+    const bound = tracker.fromContext(validEnvelope());
+
+    await bound.trackConversion({
+      label: 'purchase',
+      transactionId: 'order_1',
+    });
+
+    const adsCall = calls.find((c) => c.url.includes('googleads.googleapis.com'));
+    const conversion = (adsCall!.body as { conversions: Array<Record<string, unknown>> })
+      .conversions[0]!;
+    expect(conversion.gclid).toBe('ad-click-abc');
+  });
+
+  test('per-call gclid overrides envelope.clickIds.gclid', async () => {
+    const { tracker, calls } = trackerWithAds();
+    const bound = tracker.fromContext(validEnvelope());
+
+    await bound.trackConversion({
+      label: 'purchase',
+      transactionId: 'order_1',
+      gclid: 'override-click',
+    });
+
+    const adsCall = calls.find((c) => c.url.includes('googleads.googleapis.com'));
+    const conversion = (adsCall!.body as { conversions: Array<Record<string, unknown>> })
+      .conversions[0]!;
+    expect(conversion.gclid).toBe('override-click');
+  });
+
+  test('envelope userData flows through to userIdentifiers', async () => {
+    const { tracker, calls } = trackerWithAds();
+    const bound = tracker.fromContext(
+      validEnvelope({ userData: { email: 'jane@example.com' } }),
+    );
+
+    await bound.trackConversion({ label: 'purchase', transactionId: 'order_1' });
+
+    const adsCall = calls.find((c) => c.url.includes('googleads.googleapis.com'));
+    const conversion = (adsCall!.body as { conversions: Array<Record<string, unknown>> })
+      .conversions[0]!;
+    expect(conversion.userIdentifiers).toBeDefined();
+  });
+
+  test('per-call userData fully replaces envelope userData', async () => {
+    const { tracker, calls } = trackerWithAds();
+    const bound = tracker.fromContext(
+      validEnvelope({ userData: { email: 'envelope@example.com' } }),
+    );
+
+    await bound.trackConversion({
+      label: 'purchase',
+      transactionId: 'order_1',
+      userData: { phone: '+1 (555) 123-4567' },
+    });
+
+    const adsCall = calls.find((c) => c.url.includes('googleads.googleapis.com'));
+    const conversion = (adsCall!.body as { conversions: Array<Record<string, unknown>> })
+      .conversions[0]!;
+    const ids = conversion.userIdentifiers as Array<Record<string, unknown>>;
+    expect(ids.some((u) => 'hashedEmail' in u)).toBe(false);
+    expect(ids.some((u) => 'hashedPhoneNumber' in u)).toBe(true);
+  });
+
+  test('envelope consent { ad_user_data: denied } drops userData from payload', async () => {
+    const { tracker, calls } = trackerWithAds();
+    const bound = tracker.fromContext(
+      validEnvelope({
+        userData: { email: 'jane@example.com' },
+        consent: {
+          ad_storage: 'granted',
+          ad_user_data: 'denied',
+          ad_personalization: 'unknown',
+          analytics_storage: 'unknown',
+        },
+      }),
+    );
+
+    await bound.trackConversion({ label: 'purchase', transactionId: 'order_1' });
+
+    const adsCall = calls.find((c) => c.url.includes('googleads.googleapis.com'));
+    const conversion = (adsCall!.body as { conversions: Array<Record<string, unknown>> })
+      .conversions[0]!;
+    expect(conversion.userIdentifiers).toBeUndefined();
+  });
+
+  test('per-call consent overrides envelope consent', async () => {
+    const { tracker, calls } = trackerWithAds();
+    const bound = tracker.fromContext(
+      validEnvelope({
+        userData: { email: 'jane@example.com' },
+        consent: {
+          ad_storage: 'granted',
+          ad_user_data: 'denied',
+          ad_personalization: 'unknown',
+          analytics_storage: 'unknown',
+        },
+      }),
+    );
+
+    await bound.trackConversion({
+      label: 'purchase',
+      transactionId: 'order_1',
+      consent: { ad_user_data: 'granted' },
+    });
+
+    const adsCall = calls.find((c) => c.url.includes('googleads.googleapis.com'));
+    const conversion = (adsCall!.body as { conversions: Array<Record<string, unknown>> })
+      .conversions[0]!;
+    expect(conversion.userIdentifiers).toBeDefined();
   });
 });

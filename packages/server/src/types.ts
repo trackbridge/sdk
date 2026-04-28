@@ -1,4 +1,4 @@
-import type { ConsentValue, UserData } from '@trackbridge/core';
+import type { ConsentValue, TrackbridgeContext, UserData } from '@trackbridge/core';
 export type { ConsentValue } from '@trackbridge/core';
 
 /**
@@ -151,6 +151,36 @@ export type ServerConversionResult = {
   ads: SendResult;
 };
 
+/**
+ * Input for {@link ContextBoundServerTracker.trackEvent}. Same as
+ * {@link ServerEventInput}, but `clientId` is optional — when omitted,
+ * the bound envelope's `clientId` is used. Throws at call time if
+ * neither source supplies one.
+ */
+export type BoundServerEventInput = Omit<ServerEventInput, 'clientId'> & {
+  clientId?: string;
+};
+
+/**
+ * Input for {@link ContextBoundServerTracker.trackConversion}. Same
+ * shape as {@link ServerConversionInput}: all envelope-supplied
+ * fields (`gclid`/`gbraid`/`wbraid`, `userData`, `consent`) are
+ * already optional in the unbound input. Per-call values override
+ * envelope values on conflict (no deep merge).
+ */
+export type BoundServerConversionInput = ServerConversionInput;
+
+/**
+ * Tracker pre-bound to a {@link TrackbridgeContext}. Returned by
+ * {@link ServerTracker.fromContext}. Failure semantics symmetric with
+ * the unbound tracker — runtime API failures resolve via
+ * {@link SendResult}; merge-time programming errors throw.
+ */
+export type ContextBoundServerTracker = {
+  trackEvent(input: BoundServerEventInput): Promise<ServerEventResult>;
+  trackConversion(input: BoundServerConversionInput): Promise<ServerConversionResult>;
+};
+
 export type ServerTracker = {
   /**
    * Send a GA4 event via the Measurement Protocol. Never throws on
@@ -166,4 +196,11 @@ export type ServerTracker = {
    * caller misuse: missing `ads` config, unknown conversion label.
    */
   trackConversion(input: ServerConversionInput): Promise<ServerConversionResult>;
+  /**
+   * Returns a tracker pre-bound to the supplied envelope. Per-call
+   * inputs override envelope fields on conflict (no deep merge).
+   * Throws synchronously if the envelope is malformed (unknown `v`,
+   * missing required shape).
+   */
+  fromContext(envelope: TrackbridgeContext): ContextBoundServerTracker;
 };
