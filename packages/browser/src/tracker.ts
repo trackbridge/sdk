@@ -4,6 +4,7 @@ import {
   normalizeEmail,
   normalizeName,
   normalizePhone,
+  type TrackbridgeContext,
   type UserData,
 } from '@trackbridge/core';
 
@@ -23,6 +24,7 @@ import type {
   ConsentState,
   ConsentUpdate,
   ConsentValue,
+  ExportContextInput,
 } from './types.js';
 
 const DEFAULT_COOKIE_EXPIRY_DAYS = 90;
@@ -46,6 +48,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   let debug = resolveInitialDebug(config, io);
   const generateTransactionId =
     config.generateTransactionId ?? (() => `tb_${globalThis.crypto.randomUUID()}`);
+  const now = config.now ?? (() => Date.now());
 
   // Replace the two-boolean state with a four-key record. The signals
   // we act on (ad_storage, ad_user_data) drive the same persistence /
@@ -95,6 +98,23 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     getSessionId(): string | undefined {
       if (ga4MeasurementId === undefined) return undefined;
       return readGa4SessionId(io.getCookieHeader(), ga4MeasurementId);
+    },
+    exportContext(input?: ExportContextInput): TrackbridgeContext {
+      const ctx: TrackbridgeContext = {
+        v: 1,
+        createdAt: now(),
+        clickIds: { ...ids },
+        consent: { ...consent },
+      };
+      const cid = readGaClientId(io.getCookieHeader());
+      if (cid !== undefined) ctx.clientId = cid;
+      if (ga4MeasurementId !== undefined) {
+        const sid = readGa4SessionId(io.getCookieHeader(), ga4MeasurementId);
+        if (sid !== undefined) ctx.sessionId = sid;
+      }
+      if (userId !== undefined) ctx.userId = userId;
+      if (input?.userData !== undefined) ctx.userData = input.userData;
+      return ctx;
     },
     updateConsent(update: ConsentUpdate): void {
       const wasStorageGranted = consent.ad_storage === 'granted';

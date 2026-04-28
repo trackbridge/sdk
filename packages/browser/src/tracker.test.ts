@@ -1206,3 +1206,115 @@ describe('getSessionId', () => {
     expect(tracker.getSessionId()).toBe('555');
   });
 });
+
+describe('exportContext', () => {
+  test('returns a v: 1 envelope with state populated when fields are present', () => {
+    const { io } = captureIO({
+      url: '?gclid=ad-click-abc',
+      cookies: '_ga=GA1.1.111.222; _ga_XXXXXXXXXX=GS1.1.555.0.0.0.0.0.0',
+    });
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io,
+        ga4MeasurementId: 'G-XXXXXXXXXX',
+        consentMode: 'off',
+        now: () => 1700000000000,
+      }),
+    );
+    tracker.identifyUser('u_xyz');
+
+    const ctx = tracker.exportContext();
+    expect(ctx).toEqual({
+      v: 1,
+      createdAt: 1700000000000,
+      clientId: '111.222',
+      sessionId: '555',
+      userId: 'u_xyz',
+      clickIds: { gclid: 'ad-click-abc' },
+      consent: {
+        ad_storage: 'granted',
+        ad_user_data: 'granted',
+        ad_personalization: 'granted',
+        analytics_storage: 'granted',
+      },
+    });
+  });
+
+  test('omits absent optional fields entirely (no undefined keys)', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(
+      baseConfig({ io, consentMode: 'v2', now: () => 1700000000000 }),
+    );
+
+    const ctx = tracker.exportContext();
+    expect('clientId' in ctx).toBe(false);
+    expect('sessionId' in ctx).toBe(false);
+    expect('userId' in ctx).toBe(false);
+    expect('userData' in ctx).toBe(false);
+    expect(ctx.clickIds).toEqual({});
+    expect(ctx.consent).toEqual({
+      ad_storage: 'unknown',
+      ad_user_data: 'unknown',
+      ad_personalization: 'unknown',
+      analytics_storage: 'unknown',
+    });
+  });
+
+  test('createdAt matches injected now() seam', () => {
+    const { io } = captureIO();
+    let n = 1000;
+    const tracker = createBrowserTracker(baseConfig({ io, now: () => n }));
+
+    expect(tracker.exportContext().createdAt).toBe(1000);
+    n = 2000;
+    expect(tracker.exportContext().createdAt).toBe(2000);
+  });
+
+  test('clickIds and consent are defensive copies', () => {
+    const { io } = captureIO({ url: '?gclid=abc' });
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'off' }));
+
+    const first = tracker.exportContext();
+    first.clickIds.gclid = 'tampered';
+    first.consent.ad_storage = 'denied';
+
+    const second = tracker.exportContext();
+    expect(second.clickIds).toEqual({ gclid: 'abc' });
+    expect(second.consent.ad_storage).toBe('granted');
+  });
+
+  test('userData is included when passed via input, omitted otherwise', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    const without = tracker.exportContext();
+    expect('userData' in without).toBe(false);
+
+    const withUd = tracker.exportContext({ userData: { email: 'jane@example.com' } });
+    expect(withUd.userData).toEqual({ email: 'jane@example.com' });
+  });
+
+  test('round-trips through JSON.stringify / JSON.parse losslessly', () => {
+    const { io } = captureIO({
+      url: '?gclid=abc',
+      cookies: '_ga=GA1.1.111.222',
+    });
+    const tracker = createBrowserTracker(
+      baseConfig({ io, consentMode: 'off', now: () => 1700000000000 }),
+    );
+
+    const ctx = tracker.exportContext({ userData: { email: 'jane@example.com' } });
+    const roundTripped = JSON.parse(JSON.stringify(ctx));
+    expect(roundTripped).toEqual(ctx);
+  });
+
+  test('skips sessionId when ga4MeasurementId is unset (cookie ignored)', () => {
+    const { io } = captureIO({
+      cookies: '_ga_XXXXXXXXXX=GS1.1.555.0.0.0.0.0.0',
+    });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    const ctx = tracker.exportContext();
+    expect('sessionId' in ctx).toBe(false);
+  });
+});

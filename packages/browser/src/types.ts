@@ -35,7 +35,7 @@ export type BrowserIO = {
   gtag(...args: unknown[]): void;
 };
 
-import type { ConsentState, ConsentUpdate, UserData } from '@trackbridge/core';
+import type { ConsentState, ConsentUpdate, TrackbridgeContext, UserData } from '@trackbridge/core';
 export type { ConsentValue, ConsentUpdate, ConsentState } from '@trackbridge/core';
 
 /**
@@ -68,6 +68,15 @@ export type BrowserConversionInput = {
   value?: number;
   currency?: string;
   transactionId?: string;
+  userData?: UserData;
+};
+
+/**
+ * Input for {@link BrowserTracker.exportContext}. Optional; when
+ * supplied, `userData` is included in the envelope as a pass-through
+ * (no normalization or hashing).
+ */
+export type ExportContextInput = {
   userData?: UserData;
 };
 
@@ -111,6 +120,12 @@ export type BrowserTrackerConfig = {
    * symmetry with the server tracker config.
    */
   generateTransactionId?: () => string;
+  /**
+   * Test seam — defaults to `() => Date.now()`. Used by
+   * {@link BrowserTracker.exportContext} for the envelope's
+   * `createdAt` timestamp.
+   */
+  now?: () => number;
 };
 
 export type BrowserTracker = {
@@ -135,6 +150,17 @@ export type BrowserTracker = {
    * absent, or the value is malformed. Synchronous.
    */
   getSessionId(): string | undefined;
+  /**
+   * Captures a serializable envelope of the tracker's current state.
+   * Pass `userData` to include PII in the envelope; otherwise the
+   * envelope omits `userData`.
+   *
+   * The envelope is plain data — round-trips through `JSON.stringify`
+   * losslessly. Consumers typically persist it on a database row at
+   * checkout time and hydrate it on the server hours later via
+   * `serverTracker.fromContext(envelope)`.
+   */
+  exportContext(input?: ExportContextInput): TrackbridgeContext;
   updateConsent(update: ConsentUpdate): void;
   trackEvent(input: BrowserEventInput): Promise<void>;
   trackConversion(input: BrowserConversionInput): Promise<void>;
