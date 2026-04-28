@@ -708,3 +708,80 @@ describe('Consent Mode v2 — ad_user_data gates userData sending', () => {
     expect(set?.[2]).toEqual({ email: HASH.email_jane });
   });
 });
+
+describe('getConsent', () => {
+  test('consentMode "off" → all four signals start "granted"', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'off' }));
+
+    expect(tracker.getConsent()).toEqual({
+      ad_storage: 'granted',
+      ad_user_data: 'granted',
+      ad_personalization: 'granted',
+      analytics_storage: 'granted',
+    });
+  });
+
+  test('consentMode "v2" → all four signals start "unknown"', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'v2' }));
+
+    expect(tracker.getConsent()).toEqual({
+      ad_storage: 'unknown',
+      ad_user_data: 'unknown',
+      ad_personalization: 'unknown',
+      analytics_storage: 'unknown',
+    });
+  });
+
+  test('updateConsent only changes the signals it specifies', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'v2' }));
+
+    tracker.updateConsent({ ad_storage: 'granted' });
+    expect(tracker.getConsent()).toEqual({
+      ad_storage: 'granted',
+      ad_user_data: 'unknown',
+      ad_personalization: 'unknown',
+      analytics_storage: 'unknown',
+    });
+  });
+
+  test('updateConsent stores ad_personalization and analytics_storage verbatim', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'v2' }));
+
+    tracker.updateConsent({ ad_personalization: 'denied', analytics_storage: 'granted' });
+    const c = tracker.getConsent();
+    expect(c.ad_personalization).toBe('denied');
+    expect(c.analytics_storage).toBe('granted');
+    // The two we don't act on are stored — but the two we DO act on remain unknown.
+    expect(c.ad_storage).toBe('unknown');
+    expect(c.ad_user_data).toBe('unknown');
+  });
+
+  test('returns a defensive copy — mutating it does not affect the next read', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'off' }));
+
+    const first = tracker.getConsent();
+    first.ad_storage = 'denied';
+
+    expect(tracker.getConsent().ad_storage).toBe('granted');
+  });
+
+  test('round-trip: tracker.updateConsent(tracker.getConsent()) is idempotent', () => {
+    const { io, writes } = captureIO({ url: '?gclid=abc' });
+    const tracker = createBrowserTracker(baseConfig({ io, consentMode: 'v2' }));
+
+    tracker.updateConsent({ ad_storage: 'granted', ad_user_data: 'granted' });
+    expect(writes).toHaveLength(1);
+
+    // Read state, write it back — should not produce additional cookie writes
+    // and should not change the visible consent state.
+    const before = tracker.getConsent();
+    tracker.updateConsent(before);
+    expect(tracker.getConsent()).toEqual(before);
+    expect(writes).toHaveLength(1);
+  });
+});

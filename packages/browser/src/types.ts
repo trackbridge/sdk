@@ -30,10 +30,31 @@ export type ConsentValue = 'granted' | 'denied';
  * forward-compatibility but do not currently change behavior.
  */
 export type ConsentUpdate = {
-  ad_storage?: ConsentValue;
-  ad_user_data?: ConsentValue;
-  ad_personalization?: ConsentValue;
-  analytics_storage?: ConsentValue;
+  ad_storage?: ConsentValue | 'unknown';
+  ad_user_data?: ConsentValue | 'unknown';
+  ad_personalization?: ConsentValue | 'unknown';
+  analytics_storage?: ConsentValue | 'unknown';
+};
+
+/**
+ * Snapshot of the SDK's consent state, as returned by
+ * {@link BrowserTracker.getConsent}. Mirrors {@link ConsentUpdate}'s
+ * shape, but every signal is required and may be `'unknown'` until the
+ * consumer's CMP has reported a value via {@link BrowserTracker.updateConsent}.
+ *
+ * Under `consentMode: 'off'`, all signals start `'granted'`.
+ * Under `consentMode: 'v2'`, all signals start `'unknown'`.
+ *
+ * The SDK only acts on `ad_storage` (gates `_tb_*` cookie writes) and
+ * `ad_user_data` (gates outbound PII). `ad_personalization` and
+ * `analytics_storage` are stored verbatim from the most recent
+ * `updateConsent` call so banners can read them back.
+ */
+export type ConsentState = {
+  ad_storage: ConsentValue | 'unknown';
+  ad_user_data: ConsentValue | 'unknown';
+  ad_personalization: ConsentValue | 'unknown';
+  analytics_storage: ConsentValue | 'unknown';
 };
 
 /**
@@ -115,6 +136,12 @@ export type BrowserTrackerConfig = {
 
 export type BrowserTracker = {
   getClickIdentifiers(): ClickIdentifiers;
+  /**
+   * Returns a snapshot of the SDK's view of consent across all four
+   * signals. Returns a defensive copy — mutating the result does not
+   * affect internal state.
+   */
+  getConsent(): ConsentState;
   updateConsent(update: ConsentUpdate): void;
   trackEvent(input: BrowserEventInput): Promise<void>;
   trackConversion(input: BrowserConversionInput): Promise<void>;

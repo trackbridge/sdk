@@ -19,7 +19,9 @@ import type {
   BrowserTracker,
   BrowserTrackerConfig,
   ClickIdentifiers,
+  ConsentState,
   ConsentUpdate,
+  ConsentValue,
 } from './types.js';
 
 const DEFAULT_COOKIE_EXPIRY_DAYS = 90;
@@ -43,11 +45,11 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   const generateTransactionId =
     config.generateTransactionId ?? (() => `tb_${globalThis.crypto.randomUUID()}`);
 
-  let storageGranted = consentMode === 'off';
-  // userData is gated independently of click-id cookies (different
-  // GDPR signal). Default = granted under consentMode 'off', otherwise
-  // denied-until-granted via updateConsent. See CLAUDE.md principle 4.
-  let userDataGranted = consentMode === 'off';
+  // Replace the two-boolean state with a four-key record. The signals
+  // we act on (ad_storage, ad_user_data) drive the same persistence /
+  // PII-gate logic; ad_personalization and analytics_storage are
+  // stored verbatim so banners can read them back via getConsent().
+  let consent: ConsentState = initialConsentState(consentMode);
   let ids: ClickIdentifiers = {};
 
   if (storage !== 'none') {
@@ -58,7 +60,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   }
 
   const persist = (): void => {
-    if (storage !== 'cookie' || !storageGranted) return;
+    if (storage !== 'cookie' || consent.ad_storage !== 'granted') return;
     if (Object.keys(ids).length === 0) return;
     const cookies = buildClickIdentifierCookieStrings(ids, {
       expiryDays: cookieExpiryDays,
@@ -71,7 +73,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
 
   const maybeSetUserData = async (userData: UserData | undefined): Promise<void> => {
     if (userData === undefined) return;
-    if (!userDataGranted) return;
+    if (consent.ad_user_data !== 'granted') return;
     const built = await buildGtagUserData(userData);
     if (built !== undefined) io.gtag('set', 'user_data', built);
   };
@@ -80,15 +82,21 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     getClickIdentifiers(): ClickIdentifiers {
       return { ...ids };
     },
+    getConsent(): ConsentState {
+      return { ...consent };
+    },
     updateConsent(update: ConsentUpdate): void {
-      const wasStorageGranted = storageGranted;
-      if (update.ad_storage === 'granted') storageGranted = true;
-      else if (update.ad_storage === 'denied') storageGranted = false;
+      const wasStorageGranted = consent.ad_storage === 'granted';
+      if (update.ad_storage !== undefined) consent.ad_storage = update.ad_storage;
+      if (update.ad_user_data !== undefined) consent.ad_user_data = update.ad_user_data;
+      if (update.ad_personalization !== undefined) {
+        consent.ad_personalization = update.ad_personalization;
+      }
+      if (update.analytics_storage !== undefined) {
+        consent.analytics_storage = update.analytics_storage;
+      }
 
-      if (update.ad_user_data === 'granted') userDataGranted = true;
-      else if (update.ad_user_data === 'denied') userDataGranted = false;
-
-      if (!wasStorageGranted && storageGranted) persist();
+      if (!wasStorageGranted && consent.ad_storage === 'granted') persist();
     },
     async trackEvent(input: BrowserEventInput): Promise<void> {
       try {
@@ -195,6 +203,16 @@ async function buildGtagUserData(input: UserData): Promise<GtagUserData | undefi
   if (Object.keys(addr).length > 0) out.address = addr;
 
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function initialConsentState(mode: 'v2' | 'off'): ConsentState {
+  const initial: ConsentValue | 'unknown' = mode === 'off' ? 'granted' : 'unknown';
+  return {
+    ad_storage: initial,
+    ad_user_data: initial,
+    ad_personalization: initial,
+    analytics_storage: initial,
+  };
 }
 
 function createDefaultBrowserIO(): BrowserIO {
