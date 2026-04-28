@@ -835,4 +835,11 @@ describe('getClientId', () => {
 
     expect(tracker.getClientId()).toBe('111.222');
   });
+
+  test('skips a malformed _ga and continues to a later valid one in the same header', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1; _ga=GA1.1.111.222' });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getClientId()).toBe('111.222');
+  });
 });

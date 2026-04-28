@@ -226,11 +226,12 @@ function readGaClientId(cookieHeader: string): string | undefined {
     if (pair.slice(0, eqIdx) !== '_ga') continue;
     const value = pair.slice(eqIdx + 1);
     const firstDot = value.indexOf('.');
-    if (firstDot <= 0) return undefined;
+    if (firstDot <= 0) continue;
     const secondDot = value.indexOf('.', firstDot + 1);
-    if (secondDot <= 0) return undefined;
+    if (secondDot <= 0) continue;
     const id = value.slice(secondDot + 1);
-    return id === '' ? undefined : id;
+    if (id === '') continue;
+    return id;
   }
   return undefined;
 }
