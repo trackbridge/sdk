@@ -10,10 +10,13 @@ export const VERSION = '0.0.1';
 export { createServerTracker } from './tracker.js';
 export type {
   ConsentValue,
+  SendResult,
   ServerAdsConfig,
   ServerConsent,
   ServerConversionInput,
+  ServerConversionResult,
   ServerEventInput,
+  ServerEventResult,
   ServerTracker,
   ServerTrackerConfig,
 } from './types.js';

@@ -87,22 +87,33 @@ describe('trackEvent (GA4 Measurement Protocol)', () => {
     });
   });
 
-  test('resolves silently when fetch rejects (network error)', async () => {
+  test('resolves with ga4.ok=false when fetch rejects (network error)', async () => {
     const failingFetch: typeof globalThis.fetch = async () => {
       throw new Error('connection reset');
     };
     const tracker = createServerTracker(validConfig({ fetch: failingFetch }));
-    await expect(
-      tracker.trackEvent({ name: 'page_view', clientId: '123.456' }),
-    ).resolves.toBeUndefined();
+    const result = await tracker.trackEvent({ name: 'page_view', clientId: '123.456' });
+    expect(result.ga4.ok).toBe(false);
+    if (!result.ga4.ok) {
+      expect(result.ga4.error.message).toContain('connection reset');
+    }
   });
 
-  test('resolves silently when GA4 MP returns 4xx', async () => {
+  test('resolves with ga4.ok=false when GA4 MP returns 4xx', async () => {
     const { fn } = captureFetch(new Response('bad request', { status: 400 }));
     const tracker = createServerTracker(validConfig({ fetch: fn }));
-    await expect(
-      tracker.trackEvent({ name: 'page_view', clientId: '123.456' }),
-    ).resolves.toBeUndefined();
+    const result = await tracker.trackEvent({ name: 'page_view', clientId: '123.456' });
+    expect(result.ga4.ok).toBe(false);
+    if (!result.ga4.ok) {
+      expect(result.ga4.error.message).toMatch(/GA4 MP returned 400/);
+    }
+  });
+
+  test('resolves with ga4.ok=true on a 2xx response', async () => {
+    const { fn } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const result = await tracker.trackEvent({ name: 'page_view', clientId: '123.456' });
+    expect(result).toEqual({ ga4: { ok: true } });
   });
 
   describe('debug mode logging', () => {
@@ -668,7 +679,7 @@ describe('trackConversion (server-side via Google Ads API)', () => {
     }
   });
 
-  test('resolves silently when the Ads API returns 4xx (logs in debug mode)', async () => {
+  test('resolves with ads.ok=false when the Ads API returns 4xx (logs in debug mode)', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const adsBad = new Response(JSON.stringify({ error: { message: 'invalid' } }), {
@@ -680,9 +691,14 @@ describe('trackConversion (server-side via Google Ads API)', () => {
         validConfig({ fetch: fn, ads: validAdsConfig, debug: true }),
       );
 
-      await expect(
-        tracker.trackConversion({ label: 'purchase', transactionId: 'order_1' }),
-      ).resolves.toBeUndefined();
+      const result = await tracker.trackConversion({
+        label: 'purchase',
+        transactionId: 'order_1',
+      });
+      expect(result.ads.ok).toBe(false);
+      if (!result.ads.ok) {
+        expect(result.ads.error.message).toMatch(/Ads API returned 400/);
+      }
       expect(warnSpy).toHaveBeenCalled();
       const messages = warnSpy.mock.calls.map((c) => String(c[0]));
       expect(messages.some((m) => m.includes('400') || m.includes('Ads API'))).toBe(true);
@@ -691,7 +707,7 @@ describe('trackConversion (server-side via Google Ads API)', () => {
     }
   });
 
-  test('resolves silently when fetch throws (logs in debug mode)', async () => {
+  test('resolves with ads.ok=false when fetch throws (logs in debug mode)', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const failingFetch: typeof globalThis.fetch = async () => {
@@ -701,13 +717,30 @@ describe('trackConversion (server-side via Google Ads API)', () => {
         validConfig({ fetch: failingFetch, ads: validAdsConfig, debug: true }),
       );
 
-      await expect(
-        tracker.trackConversion({ label: 'purchase', transactionId: 'order_1' }),
-      ).resolves.toBeUndefined();
+      const result = await tracker.trackConversion({
+        label: 'purchase',
+        transactionId: 'order_1',
+      });
+      expect(result.ads.ok).toBe(false);
+      if (!result.ads.ok) {
+        expect(result.ads.error.message).toContain('ECONNRESET');
+      }
       expect(warnSpy).toHaveBeenCalled();
     } finally {
       warnSpy.mockRestore();
     }
+  });
+
+  test('resolves with ads.ok=true on a 2xx Ads API response', async () => {
+    const { fn } = captureFetchSequence([oauthResponseOk(), adsResponseOk()]);
+    const tracker = createServerTracker(
+      validConfig({ fetch: fn, ads: validAdsConfig }),
+    );
+    const result = await tracker.trackConversion({
+      label: 'purchase',
+      transactionId: 'order_1',
+    });
+    expect(result).toEqual({ ads: { ok: true } });
   });
 
   test('does NOT log Ads API failures outside debug mode', async () => {

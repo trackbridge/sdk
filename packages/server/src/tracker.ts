@@ -10,9 +10,12 @@ import {
 import { createAdsApiClient, type AdsApiClient } from './ads-api.js';
 import { createAccessTokenProvider } from './oauth.js';
 import type {
+  SendResult,
   ServerConsent,
   ServerConversionInput,
+  ServerConversionResult,
   ServerEventInput,
+  ServerEventResult,
   ServerTracker,
   ServerTrackerConfig,
 } from './types.js';
@@ -35,11 +38,12 @@ const GA4_MP_ENDPOINT = 'https://www.google-analytics.com/mp/collect';
  * Measurement Protocol and (when {@link ServerTrackerConfig.ads} is
  * configured) conversions through the Google Ads API.
  *
- * Failure semantics: per the SDK design principles, network errors
- * and non-2xx responses do not throw. They resolve normally; if
- * `debug: true` is set, the failure is logged via `console.warn`.
- * Programming errors (missing required config, unknown conversion
- * label) throw.
+ * Failure semantics: runtime API failures (network errors, non-2xx
+ * responses, OAuth refresh failures) never throw. They resolve to a
+ * structured {@link SendResult} on the returned object so callers can
+ * surface, log, or ignore them without try/catch. Programming errors
+ * (missing required config, unknown conversion label) throw at
+ * config-time or call-time so they fail loud.
  */
 export function createServerTracker(config: ServerTrackerConfig): ServerTracker {
   if (!config.ga4MeasurementId) {
@@ -75,7 +79,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
   }
 
   return {
-    async trackEvent(input: ServerEventInput): Promise<void> {
+    async trackEvent(input: ServerEventInput): Promise<ServerEventResult> {
       const url = new URL(GA4_MP_ENDPOINT);
       url.searchParams.set('measurement_id', config.ga4MeasurementId);
       url.searchParams.set('api_secret', config.ga4ApiSecret);
@@ -90,25 +94,31 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
         if (userData !== undefined) body.user_data = userData;
       }
 
+      let ga4: SendResult;
       try {
         const response = await fetchImpl(url.toString(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-        if (!response.ok && debug) {
-          console.warn(
+        if (response.ok) {
+          ga4 = { ok: true };
+        } else {
+          const error = new Error(
             `[trackbridge] GA4 MP returned ${response.status} ${response.statusText}`,
           );
+          if (debug) console.warn(error.message);
+          ga4 = { ok: false, error };
         }
       } catch (err) {
-        if (debug) {
-          console.warn('[trackbridge] GA4 MP request failed:', err);
-        }
+        const error = err instanceof Error ? err : new Error(String(err));
+        if (debug) console.warn('[trackbridge] GA4 MP request failed:', error);
+        ga4 = { ok: false, error };
       }
+      return { ga4 };
     },
 
-    async trackConversion(input: ServerConversionInput): Promise<void> {
+    async trackConversion(input: ServerConversionInput): Promise<ServerConversionResult> {
       const ads = config.ads;
       if (ads === undefined || adsApiClient === null) {
         throw new Error(
@@ -145,22 +155,29 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
         if (ids.length > 0) conversion.userIdentifiers = ids;
       }
 
+      let ads_: SendResult;
       try {
         const response = await adsApiClient.uploadClickConversions({
           customerId: ads.customerId,
           conversions: [conversion],
         });
-        if (!response.ok && debug) {
-          console.warn(
-            `[trackbridge] Ads API returned ${response.status}`,
-            response.body,
+        if (response.ok) {
+          ads_ = { ok: true };
+        } else {
+          const error = new Error(
+            `[trackbridge] Ads API returned ${response.status}: ${
+              typeof response.body === 'string' ? response.body : JSON.stringify(response.body)
+            }`,
           );
+          if (debug) console.warn(error.message);
+          ads_ = { ok: false, error };
         }
       } catch (err) {
-        if (debug) {
-          console.warn('[trackbridge] Ads API request failed:', err);
-        }
+        const error = err instanceof Error ? err : new Error(String(err));
+        if (debug) console.warn('[trackbridge] Ads API request failed:', error);
+        ads_ = { ok: false, error };
       }
+      return { ads: ads_ };
     },
   };
 }

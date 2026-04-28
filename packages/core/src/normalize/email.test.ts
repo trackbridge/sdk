@@ -35,8 +35,8 @@ describe('normalizeEmail', () => {
   // (U+00E9) and decomposed (e + U+0301) forms of café must produce the
   // *same string*, or browser-vs-server hashes diverge silently.
   describe('unicode NFC normalization', () => {
-    const composed = 'café@example.com'; // é as single code point
-    const decomposed = 'café@example.com'; // e + combining acute
+    const composed = 'caf\u00e9@example.com'; // é as single code point
+    const decomposed = 'cafe\u0301@example.com'; // e + combining acute
 
     test('the test inputs really are different strings before normalization', () => {
       expect(composed).not.toBe(decomposed);
@@ -47,7 +47,7 @@ describe('normalizeEmail', () => {
     });
 
     test('outputs the NFC (composed) form', () => {
-      expect(normalizeEmail(decomposed)).toBe('café@example.com');
+      expect(normalizeEmail(decomposed)).toBe('caf\u00e9@example.com');
     });
 
     test('outputs are byte-identical when UTF-8 encoded', () => {
