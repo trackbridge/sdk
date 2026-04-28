@@ -53,3 +53,45 @@ export type HashedUserData = {
   lastName?: string;
   address?: HashedAddress;
 };
+
+/**
+ * Consent signal value. The two states a CMP reports.
+ *
+ * Trackbridge always also accepts `'unknown'` alongside this in
+ * value unions where signal-not-yet-known is a real state (see
+ * {@link ConsentUpdate}, {@link ConsentState}, and `ServerConsent`).
+ */
+export type ConsentValue = 'granted' | 'denied';
+
+/**
+ * Patch shape for `BrowserTracker.updateConsent`. Partial — only
+ * signals the caller wants to change need to be present. Values
+ * include `'unknown'` so the round-trip
+ * `tracker.updateConsent(tracker.getConsent())` typechecks.
+ */
+export type ConsentUpdate = {
+  ad_storage?: ConsentValue | 'unknown';
+  ad_user_data?: ConsentValue | 'unknown';
+  ad_personalization?: ConsentValue | 'unknown';
+  analytics_storage?: ConsentValue | 'unknown';
+};
+
+/**
+ * Snapshot returned by `BrowserTracker.getConsent`. All four signals
+ * are present; values include `'unknown'` until the consumer's CMP
+ * has reported a value via `updateConsent`.
+ *
+ * Under `consentMode: 'off'`, all signals start `'granted'`.
+ * Under `consentMode: 'v2'`, all signals start `'unknown'`.
+ *
+ * The browser SDK only acts on `ad_storage` (gates `_tb_*` cookie
+ * writes) and `ad_user_data` (gates outbound PII). The other two
+ * signals are stored verbatim from the most recent `updateConsent`
+ * call so banners can read them back.
+ */
+export type ConsentState = {
+  ad_storage: ConsentValue | 'unknown';
+  ad_user_data: ConsentValue | 'unknown';
+  ad_personalization: ConsentValue | 'unknown';
+  analytics_storage: ConsentValue | 'unknown';
+};

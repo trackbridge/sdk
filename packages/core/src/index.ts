@@ -11,7 +11,15 @@
 
 export const VERSION = '0.0.1';
 
-export type { Address, HashedAddress, HashedUserData, UserData } from './types.js';
+export type {
+  Address,
+  ConsentState,
+  ConsentUpdate,
+  ConsentValue,
+  HashedAddress,
+  HashedUserData,
+  UserData,
+} from './types.js';
 export { hashSha256 } from './hash.js';
 export { hashUserData } from './hash-user-data.js';
 export { normalizeAddress } from './normalize/address.js';

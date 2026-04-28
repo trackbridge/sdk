@@ -1,6 +1,5 @@
-import type { UserData } from '@trackbridge/core';
-
-export type ConsentValue = 'granted' | 'denied';
+import type { ConsentValue, UserData } from '@trackbridge/core';
+export type { ConsentValue } from '@trackbridge/core';
 
 /**
  * Per-call consent signals for the server tracker. Unlike the browser
@@ -16,8 +15,8 @@ export type ConsentValue = 'granted' | 'denied';
  * tracked here" — the request is sent in full.
  */
 export type ServerConsent = {
-  ad_user_data?: ConsentValue;
-  ad_personalization?: ConsentValue;
+  ad_user_data?: ConsentValue | 'unknown';
+  ad_personalization?: ConsentValue | 'unknown';
 };
 
 /**

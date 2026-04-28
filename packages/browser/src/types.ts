@@ -15,48 +15,6 @@ export type ClickIdentifiers = {
   wbraid?: string;
 };
 
-export type ConsentValue = 'granted' | 'denied';
-
-/**
- * Subset of the gtag Consent Mode v2 signals Trackbridge cares about.
- *
- * Behavior under `consentMode: 'v2'`:
- * - `ad_storage` gates click-identifier cookie writes.
- * - `ad_user_data` gates whether `userData` (PII) is attached to
- *   outbound `gtag` calls. Unknown state (no `updateConsent` yet) is
- *   treated as denied — userData is dropped until consent is granted.
- *
- * `ad_personalization` and `analytics_storage` are stored for
- * forward-compatibility but do not currently change behavior.
- */
-export type ConsentUpdate = {
-  ad_storage?: ConsentValue | 'unknown';
-  ad_user_data?: ConsentValue | 'unknown';
-  ad_personalization?: ConsentValue | 'unknown';
-  analytics_storage?: ConsentValue | 'unknown';
-};
-
-/**
- * Snapshot of the SDK's consent state, as returned by
- * {@link BrowserTracker.getConsent}. Mirrors {@link ConsentUpdate}'s
- * shape, but every signal is required and may be `'unknown'` until the
- * consumer's CMP has reported a value via {@link BrowserTracker.updateConsent}.
- *
- * Under `consentMode: 'off'`, all signals start `'granted'`.
- * Under `consentMode: 'v2'`, all signals start `'unknown'`.
- *
- * The SDK only acts on `ad_storage` (gates `_tb_*` cookie writes) and
- * `ad_user_data` (gates outbound PII). `ad_personalization` and
- * `analytics_storage` are stored verbatim from the most recent
- * `updateConsent` call so banners can read them back.
- */
-export type ConsentState = {
-  ad_storage: ConsentValue | 'unknown';
-  ad_user_data: ConsentValue | 'unknown';
-  ad_personalization: ConsentValue | 'unknown';
-  analytics_storage: ConsentValue | 'unknown';
-};
-
 /**
  * Test seam — overrides the DOM I/O the tracker uses to read the URL,
  * read/write cookies, and push gtag entries onto `window.dataLayer`.
@@ -77,7 +35,8 @@ export type BrowserIO = {
   gtag(...args: unknown[]): void;
 };
 
-import type { UserData } from '@trackbridge/core';
+import type { ConsentState, ConsentUpdate, UserData } from '@trackbridge/core';
+export type { ConsentValue, ConsentUpdate, ConsentState } from '@trackbridge/core';
 
 /**
  * Input for {@link BrowserTracker.trackEvent}. Mirror of
