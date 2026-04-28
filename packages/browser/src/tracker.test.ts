@@ -984,3 +984,77 @@ describe('debugUrlParam (init-time URL override)', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('identifyUser / clearUser', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  test('with ga4MeasurementId set, identifyUser pushes a gtag config call with user_id and send_page_view: false', () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-XXXXXXXXXX' }));
+
+    tracker.identifyUser('u_123');
+
+    expect(gtagCalls).toContainEqual([
+      'config',
+      'G-XXXXXXXXXX',
+      { user_id: 'u_123', send_page_view: false },
+    ]);
+  });
+
+  test('clearUser pushes a gtag config call with user_id: undefined and send_page_view: false', () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, ga4MeasurementId: 'G-XXXXXXXXXX' }));
+
+    tracker.clearUser();
+
+    expect(gtagCalls).toContainEqual([
+      'config',
+      'G-XXXXXXXXXX',
+      { user_id: undefined, send_page_view: false },
+    ]);
+  });
+
+  test('without ga4MeasurementId, identifyUser is a no-op (no gtag call)', () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    tracker.identifyUser('u_123');
+
+    expect(gtagCalls.find((c) => c[0] === 'config')).toBeUndefined();
+  });
+
+  test('without ga4MeasurementId and debug: true, identifyUser warns', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io, debug: true }));
+
+    tracker.identifyUser('u_123');
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0]?.[0])).toMatch(/identifyUser/);
+  });
+
+  test('without ga4MeasurementId and debug: false, identifyUser is silent', () => {
+    const { io } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    tracker.identifyUser('u_123');
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test('without ga4MeasurementId, clearUser is a no-op and silent at debug: false', () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    tracker.clearUser();
+
+    expect(gtagCalls.find((c) => c[0] === 'config')).toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});

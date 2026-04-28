@@ -165,4 +165,20 @@ export type BrowserTracker = {
    * the `debugUrlParam`-driven URL override. Most-recent-call wins.
    */
   setDebug(enabled: boolean): void;
+  /**
+   * Sets `user_id` for subsequent GA4 events. Pushes
+   * `gtag('config', ga4MeasurementId, { user_id, send_page_view: false })`.
+   * `send_page_view: false` is required to prevent gtag from re-firing
+   * a `page_view` whenever `config` is called.
+   *
+   * No-op if `ga4MeasurementId` is unset (debug-warn under `debug: true`).
+   */
+  identifyUser(userId: string): void;
+  /**
+   * Clears `user_id` for subsequent GA4 events. Pushes
+   * `gtag('config', ga4MeasurementId, { user_id: undefined, send_page_view: false })`.
+   *
+   * No-op if `ga4MeasurementId` is unset (debug-warn under `debug: true`).
+   */
+  clearUser(): void;
 };

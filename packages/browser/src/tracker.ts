@@ -40,6 +40,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   const consentMode = config.consentMode ?? 'off';
   const storage = config.clickIdentifierStorage ?? 'cookie';
   const cookieExpiryDays = config.cookieExpiryDays ?? DEFAULT_COOKIE_EXPIRY_DAYS;
+  const ga4MeasurementId = config.ga4MeasurementId;
   const io = config.io ?? createDefaultBrowserIO();
   let debug = resolveInitialDebug(config, io);
   const generateTransactionId =
@@ -51,6 +52,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   // stored verbatim so banners can read them back via getConsent().
   let consent: ConsentState = initialConsentState(consentMode);
   let ids: ClickIdentifiers = {};
+  let userId: string | undefined = undefined;
 
   if (storage !== 'none') {
     const cookieIds =
@@ -136,6 +138,30 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     },
     setDebug(enabled: boolean): void {
       debug = enabled;
+    },
+    identifyUser(id: string): void {
+      if (ga4MeasurementId === undefined) {
+        if (debug) {
+          console.warn(
+            '[trackbridge] identifyUser called without ga4MeasurementId — no-op',
+          );
+        }
+        return;
+      }
+      userId = id;
+      io.gtag('config', ga4MeasurementId, { user_id: id, send_page_view: false });
+    },
+    clearUser(): void {
+      if (ga4MeasurementId === undefined) {
+        if (debug) {
+          console.warn(
+            '[trackbridge] clearUser called without ga4MeasurementId — no-op',
+          );
+        }
+        return;
+      }
+      userId = undefined;
+      io.gtag('config', ga4MeasurementId, { user_id: undefined, send_page_view: false });
     },
   };
 }
