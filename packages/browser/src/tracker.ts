@@ -92,6 +92,10 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     getClientId(): string | undefined {
       return readGaClientId(io.getCookieHeader());
     },
+    getSessionId(): string | undefined {
+      if (ga4MeasurementId === undefined) return undefined;
+      return readGa4SessionId(io.getCookieHeader(), ga4MeasurementId);
+    },
     updateConsent(update: ConsentUpdate): void {
       const wasStorageGranted = consent.ad_storage === 'granted';
       if (update.ad_storage !== undefined) consent.ad_storage = update.ad_storage;
@@ -293,6 +297,32 @@ function readGaClientId(cookieHeader: string): string | undefined {
     if (secondDot <= 0) continue;
     const id = value.slice(secondDot + 1);
     if (id === '') continue;
+    return id;
+  }
+  return undefined;
+}
+
+/**
+ * Parses the canonical GA4 session ID from a `document.cookie`-style
+ * header. The `_ga_<containerId>` value format is
+ * `GS<version>.<count>.<sessionId>.<sessionStart>.<...>`. The session
+ * ID is everything between the second and third dots. Returns
+ * `undefined` if the cookie is absent or malformed. Cookie name uses
+ * the measurement ID with the leading `G-` stripped.
+ */
+function readGa4SessionId(cookieHeader: string, measurementId: string): string | undefined {
+  if (cookieHeader === '') return undefined;
+  const cookieName = `_ga_${measurementId.replace(/^G-/, '')}`;
+  for (const rawPair of cookieHeader.split(';')) {
+    const pair = rawPair.trim();
+    const eqIdx = pair.indexOf('=');
+    if (eqIdx <= 0) continue;
+    if (pair.slice(0, eqIdx) !== cookieName) continue;
+    const value = pair.slice(eqIdx + 1);
+    const parts = value.split('.');
+    if (parts.length < 3) continue;
+    const id = parts[2];
+    if (id === undefined || id === '') continue;
     return id;
   }
   return undefined;

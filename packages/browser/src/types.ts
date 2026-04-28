@@ -129,6 +129,12 @@ export type BrowserTracker = {
    * may return `undefined`.
    */
   getClientId(): string | undefined;
+  /**
+   * Reads the GA4 session ID from the `_ga_<containerId>` cookie.
+   * Returns `undefined` if `ga4MeasurementId` is unset, the cookie is
+   * absent, or the value is malformed. Synchronous.
+   */
+  getSessionId(): string | undefined;
   updateConsent(update: ConsentUpdate): void;
   trackEvent(input: BrowserEventInput): Promise<void>;
   trackConversion(input: BrowserConversionInput): Promise<void>;

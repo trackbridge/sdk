@@ -1145,3 +1145,64 @@ describe('trackPageView', () => {
     await expect(tracker.trackPageView({ path: '/x' })).resolves.toBeUndefined();
   });
 });
+
+describe('getSessionId', () => {
+  test('returns the canonical sessionId from a valid _ga_<id> cookie', () => {
+    const { io } = captureIO({
+      cookies: '_ga_XXXXXXXXXX=GS1.1.987654321.0.0.1234567890.0.0.0',
+    });
+    const tracker = createBrowserTracker(
+      baseConfig({ io, ga4MeasurementId: 'G-XXXXXXXXXX' }),
+    );
+
+    expect(tracker.getSessionId()).toBe('987654321');
+  });
+
+  test('returns undefined when ga4MeasurementId is unset', () => {
+    const { io } = captureIO({
+      cookies: '_ga_XXXXXXXXXX=GS1.1.987654321.0.0.0.0.0.0',
+    });
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    expect(tracker.getSessionId()).toBeUndefined();
+  });
+
+  test('returns undefined when the _ga_<id> cookie is absent', () => {
+    const { io } = captureIO({ cookies: '_ga=GA1.1.111.222' });
+    const tracker = createBrowserTracker(
+      baseConfig({ io, ga4MeasurementId: 'G-XXXXXXXXXX' }),
+    );
+
+    expect(tracker.getSessionId()).toBeUndefined();
+  });
+
+  test('returns undefined for malformed values (fewer than 3 dots)', () => {
+    const { io } = captureIO({ cookies: '_ga_XXXXXXXXXX=GS1.1' });
+    const tracker = createBrowserTracker(
+      baseConfig({ io, ga4MeasurementId: 'G-XXXXXXXXXX' }),
+    );
+
+    expect(tracker.getSessionId()).toBeUndefined();
+  });
+
+  test('returns undefined when the third dot-segment is empty', () => {
+    const { io } = captureIO({ cookies: '_ga_XXXXXXXXXX=GS1.1..0' });
+    const tracker = createBrowserTracker(
+      baseConfig({ io, ga4MeasurementId: 'G-XXXXXXXXXX' }),
+    );
+
+    expect(tracker.getSessionId()).toBeUndefined();
+  });
+
+  test('strips the G- prefix when computing the cookie name', () => {
+    // Cookie name is _ga_XXXXX (no G-), even though measurement ID is G-XXXXX.
+    const { io } = captureIO({
+      cookies: '_ga_ABCDEFG=GS1.1.555.0.0.0.0.0.0',
+    });
+    const tracker = createBrowserTracker(
+      baseConfig({ io, ga4MeasurementId: 'G-ABCDEFG' }),
+    );
+
+    expect(tracker.getSessionId()).toBe('555');
+  });
+});
