@@ -1,5 +1,14 @@
 # @trackbridge-examples/nextjs-demo
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [c364dbe]
+- Updated dependencies [1392180]
+  - @trackbridge/browser@0.1.0
+  - @trackbridge/server@0.1.0
+
 ## 0.0.3
 
 ### Patch Changes
