@@ -84,6 +84,11 @@ export type ServerTrackerConfig = {
 export type ServerEventInput = {
   name: string;
   clientId: string;
+  /**
+   * Maps to GA4 MP body's top-level `user_id`. Optional. When set,
+   * GA4 ties the event to the supplied user across sessions.
+   */
+  userId?: string;
   params?: Record<string, unknown>;
   userData?: UserData;
   /**

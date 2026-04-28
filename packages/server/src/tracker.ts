@@ -88,6 +88,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
         client_id: input.clientId,
         events: [{ name: input.name, params: input.params ?? {} }],
       };
+      if (input.userId !== undefined) body.user_id = input.userId;
 
       if (input.userData !== undefined && userDataAllowed(input.consent)) {
         const userData = await buildGa4UserData(input.userData);

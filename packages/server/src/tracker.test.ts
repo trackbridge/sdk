@@ -172,6 +172,33 @@ describe('trackEvent (GA4 Measurement Protocol)', () => {
   });
 });
 
+describe('trackEvent — userId field (envelope-friendly)', () => {
+  test('when userId is set, MP body includes a top-level user_id', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    await tracker.trackEvent({
+      name: 'login',
+      clientId: '123.456',
+      userId: 'u_xyz',
+    });
+
+    expect(calls[0]!.body).toEqual({
+      client_id: '123.456',
+      user_id: 'u_xyz',
+      events: [{ name: 'login', params: {} }],
+    });
+  });
+
+  test('when userId is unset, MP body has NO user_id key', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    await tracker.trackEvent({ name: 'page_view', clientId: '123.456' });
+
+    const body = calls[0]!.body as Record<string, unknown>;
+    expect('user_id' in body).toBe(false);
+  });
+});
+
 // Pinned digests for canonical normalized inputs. Same source of truth as
 // core/src/hash.test.ts — if these change, dual-send divergence is the
 // likely cause. See docs/dual-send-invariant.md.
