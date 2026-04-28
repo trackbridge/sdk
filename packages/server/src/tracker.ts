@@ -4,12 +4,16 @@ import {
   normalizeEmail,
   normalizeName,
   normalizePhone,
+  type TrackbridgeContext,
   type UserData,
 } from '@trackbridge/core';
 
 import { createAdsApiClient, type AdsApiClient } from './ads-api.js';
 import { createAccessTokenProvider } from './oauth.js';
 import type {
+  BoundServerConversionInput,
+  BoundServerEventInput,
+  ContextBoundServerTracker,
   SendResult,
   ServerConsent,
   ServerConversionInput,
@@ -78,7 +82,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
     });
   }
 
-  return {
+  const tracker: ServerTracker = {
     async trackEvent(input: ServerEventInput): Promise<ServerEventResult> {
       const url = new URL(GA4_MP_ENDPOINT);
       url.searchParams.set('measurement_id', config.ga4MeasurementId);
@@ -88,6 +92,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
         client_id: input.clientId,
         events: [{ name: input.name, params: input.params ?? {} }],
       };
+      if (input.userId !== undefined) body.user_id = input.userId;
 
       if (input.userData !== undefined && userDataAllowed(input.consent)) {
         const userData = await buildGa4UserData(input.userData);
@@ -179,7 +184,64 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
       }
       return { ads: ads_ };
     },
+
+    fromContext(envelope: TrackbridgeContext): ContextBoundServerTracker {
+      if (envelope === null || typeof envelope !== 'object') {
+        throw new Error('[trackbridge] fromContext: envelope must be an object');
+      }
+      if ((envelope as { v?: unknown }).v !== 1) {
+        throw new Error(
+          `[trackbridge] fromContext: unknown envelope version v=${String((envelope as { v?: unknown }).v)} ` +
+            `(this server understands v=1)`,
+        );
+      }
+      if (typeof envelope.clickIds !== 'object' || envelope.clickIds === null) {
+        throw new Error('[trackbridge] fromContext: envelope.clickIds must be an object');
+      }
+      if (typeof envelope.consent !== 'object' || envelope.consent === null) {
+        throw new Error('[trackbridge] fromContext: envelope.consent must be an object');
+      }
+      // Snapshot the envelope so post-bind mutations by the caller don't
+      // affect the bound tracker. Common pattern: persist envelope on a row,
+      // hydrate later — without this, mutating the hydrated object after
+      // fromContext returns would silently change subsequent sends.
+      const env: TrackbridgeContext = structuredClone(envelope);
+      return {
+        async trackEvent(input: BoundServerEventInput): Promise<ServerEventResult> {
+          const clientId = input.clientId ?? env.clientId;
+          if (clientId === undefined) {
+            throw new Error(
+              '[trackbridge] fromContext-bound trackEvent called without clientId — ' +
+                'envelope did not capture one and input did not supply one',
+            );
+          }
+          let params = input.params;
+          if (env.sessionId !== undefined && params?.session_id === undefined) {
+            params = { ...(params ?? {}), session_id: env.sessionId };
+          }
+          return tracker.trackEvent({
+            name: input.name,
+            clientId,
+            userId: input.userId ?? env.userId,
+            params,
+            userData: input.userData ?? env.userData,
+            consent: input.consent ?? env.consent,
+          });
+        },
+        async trackConversion(input: BoundServerConversionInput): Promise<ServerConversionResult> {
+          return tracker.trackConversion({
+            ...input,
+            gclid: input.gclid ?? env.clickIds.gclid,
+            gbraid: input.gbraid ?? env.clickIds.gbraid,
+            wbraid: input.wbraid ?? env.clickIds.wbraid,
+            userData: input.userData ?? env.userData,
+            consent: input.consent ?? env.consent,
+          });
+        },
+      };
+    },
   };
+  return tracker;
 }
 
 function warnAutoTransactionId(id: string): void {

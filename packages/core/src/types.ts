@@ -53,3 +53,76 @@ export type HashedUserData = {
   lastName?: string;
   address?: HashedAddress;
 };
+
+/**
+ * Consent signal value. The two states a CMP reports.
+ *
+ * Trackbridge always also accepts `'unknown'` alongside this in
+ * value unions where signal-not-yet-known is a real state (see
+ * {@link ConsentUpdate}, {@link ConsentState}, and `ServerConsent`).
+ */
+export type ConsentValue = 'granted' | 'denied';
+
+/**
+ * Patch shape for `BrowserTracker.updateConsent`. Partial — only
+ * signals the caller wants to change need to be present. Values
+ * include `'unknown'` so the round-trip
+ * `tracker.updateConsent(tracker.getConsent())` typechecks.
+ */
+export type ConsentUpdate = {
+  ad_storage?: ConsentValue | 'unknown';
+  ad_user_data?: ConsentValue | 'unknown';
+  ad_personalization?: ConsentValue | 'unknown';
+  analytics_storage?: ConsentValue | 'unknown';
+};
+
+/**
+ * Snapshot returned by `BrowserTracker.getConsent`. All four signals
+ * are present; values include `'unknown'` until the consumer's CMP
+ * has reported a value via `updateConsent`.
+ *
+ * Under `consentMode: 'off'`, all signals start `'granted'`.
+ * Under `consentMode: 'v2'`, all signals start `'unknown'`.
+ *
+ * The browser SDK only acts on `ad_storage` (gates `_tb_*` cookie
+ * writes) and `ad_user_data` (gates outbound PII). The other two
+ * signals are stored verbatim from the most recent `updateConsent`
+ * call so banners can read them back.
+ */
+export type ConsentState = {
+  ad_storage: ConsentValue | 'unknown';
+  ad_user_data: ConsentValue | 'unknown';
+  ad_personalization: ConsentValue | 'unknown';
+  analytics_storage: ConsentValue | 'unknown';
+};
+
+/**
+ * Serializable envelope capturing the browser tracker's identity,
+ * attribution, consent, and (optionally) PII at a moment in time.
+ *
+ * Round-trips through `JSON.stringify`/`JSON.parse` losslessly.
+ * Consumers persist this on a row in their database (e.g. a Payment
+ * record) at checkout time, then hydrate it into a server-side
+ * tracker call hours later when the webhook fires via
+ * `serverTracker.fromContext(envelope)`.
+ *
+ * Versioned via `v`. Server-side `fromContext` throws on unknown
+ * versions — envelopes are opaque payloads, not user-editable.
+ */
+export type TrackbridgeContext = {
+  v: 1;
+  /** Unix timestamp (ms) at envelope creation. Diagnostic / staleness signal. */
+  createdAt: number;
+  /** GA4 client ID — `_ga` cookie's third+fourth dot-segments. */
+  clientId?: string;
+  /** GA4 session ID — `_ga_<containerId>` cookie's third dot-segment. */
+  sessionId?: string;
+  /** Set if the consumer called `tracker.identifyUser(id)` before exporting. */
+  userId?: string;
+  /** Captured automatically by the browser tracker from URL params + first-party cookies. */
+  clickIds: { gclid?: string; gbraid?: string; wbraid?: string };
+  /** Snapshot of consent at envelope-creation time. */
+  consent: ConsentState;
+  /** Caller-supplied via `exportContext({ userData })`. Pre-normalize, pre-hash pass-through. */
+  userData?: UserData;
+};

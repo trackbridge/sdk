@@ -15,48 +15,6 @@ export type ClickIdentifiers = {
   wbraid?: string;
 };
 
-export type ConsentValue = 'granted' | 'denied';
-
-/**
- * Subset of the gtag Consent Mode v2 signals Trackbridge cares about.
- *
- * Behavior under `consentMode: 'v2'`:
- * - `ad_storage` gates click-identifier cookie writes.
- * - `ad_user_data` gates whether `userData` (PII) is attached to
- *   outbound `gtag` calls. Unknown state (no `updateConsent` yet) is
- *   treated as denied — userData is dropped until consent is granted.
- *
- * `ad_personalization` and `analytics_storage` are stored for
- * forward-compatibility but do not currently change behavior.
- */
-export type ConsentUpdate = {
-  ad_storage?: ConsentValue | 'unknown';
-  ad_user_data?: ConsentValue | 'unknown';
-  ad_personalization?: ConsentValue | 'unknown';
-  analytics_storage?: ConsentValue | 'unknown';
-};
-
-/**
- * Snapshot of the SDK's consent state, as returned by
- * {@link BrowserTracker.getConsent}. Mirrors {@link ConsentUpdate}'s
- * shape, but every signal is required and may be `'unknown'` until the
- * consumer's CMP has reported a value via {@link BrowserTracker.updateConsent}.
- *
- * Under `consentMode: 'off'`, all signals start `'granted'`.
- * Under `consentMode: 'v2'`, all signals start `'unknown'`.
- *
- * The SDK only acts on `ad_storage` (gates `_tb_*` cookie writes) and
- * `ad_user_data` (gates outbound PII). `ad_personalization` and
- * `analytics_storage` are stored verbatim from the most recent
- * `updateConsent` call so banners can read them back.
- */
-export type ConsentState = {
-  ad_storage: ConsentValue | 'unknown';
-  ad_user_data: ConsentValue | 'unknown';
-  ad_personalization: ConsentValue | 'unknown';
-  analytics_storage: ConsentValue | 'unknown';
-};
-
 /**
  * Test seam — overrides the DOM I/O the tracker uses to read the URL,
  * read/write cookies, and push gtag entries onto `window.dataLayer`.
@@ -77,7 +35,8 @@ export type BrowserIO = {
   gtag(...args: unknown[]): void;
 };
 
-import type { UserData } from '@trackbridge/core';
+import type { ConsentState, ConsentUpdate, TrackbridgeContext, UserData } from '@trackbridge/core';
+export type { ConsentValue, ConsentUpdate, ConsentState } from '@trackbridge/core';
 
 /**
  * Input for {@link BrowserTracker.trackEvent}. Mirror of
@@ -109,6 +68,15 @@ export type BrowserConversionInput = {
   value?: number;
   currency?: string;
   transactionId?: string;
+  userData?: UserData;
+};
+
+/**
+ * Input for {@link BrowserTracker.exportContext}. Optional; when
+ * supplied, `userData` is included in the envelope as a pass-through
+ * (no normalization or hashing).
+ */
+export type ExportContextInput = {
   userData?: UserData;
 };
 
@@ -152,6 +120,12 @@ export type BrowserTrackerConfig = {
    * symmetry with the server tracker config.
    */
   generateTransactionId?: () => string;
+  /**
+   * Test seam — defaults to `() => Date.now()`. Used by
+   * {@link BrowserTracker.exportContext} for the envelope's
+   * `createdAt` timestamp.
+   */
+  now?: () => number;
 };
 
 export type BrowserTracker = {
@@ -170,6 +144,23 @@ export type BrowserTracker = {
    * may return `undefined`.
    */
   getClientId(): string | undefined;
+  /**
+   * Reads the GA4 session ID from the `_ga_<containerId>` cookie.
+   * Returns `undefined` if `ga4MeasurementId` is unset, the cookie is
+   * absent, or the value is malformed. Synchronous.
+   */
+  getSessionId(): string | undefined;
+  /**
+   * Captures a serializable envelope of the tracker's current state.
+   * Pass `userData` to include PII in the envelope; otherwise the
+   * envelope omits `userData`.
+   *
+   * The envelope is plain data — round-trips through `JSON.stringify`
+   * losslessly. Consumers typically persist it on a database row at
+   * checkout time and hydrate it on the server hours later via
+   * `serverTracker.fromContext(envelope)`.
+   */
+  exportContext(input?: ExportContextInput): TrackbridgeContext;
   updateConsent(update: ConsentUpdate): void;
   trackEvent(input: BrowserEventInput): Promise<void>;
   trackConversion(input: BrowserConversionInput): Promise<void>;

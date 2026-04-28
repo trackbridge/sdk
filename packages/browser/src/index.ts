@@ -19,4 +19,6 @@ export type {
   ConsentState,
   ConsentUpdate,
   ConsentValue,
+  ExportContextInput,
 } from './types.js';
+export type { TrackbridgeContext } from '@trackbridge/core';
