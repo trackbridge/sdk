@@ -1,5 +1,16 @@
 # @trackbridge/server
 
+## 0.0.4
+
+### Patch Changes
+
+- 76e4448: docs: add per-package README files
+
+  Each package now has a focused landing page on npmjs.com explaining what that specific package does, how to install it, and a minimal example. Without these, the npm package pages were bare placeholders.
+
+- Updated dependencies [76e4448]
+  - @trackbridge/core@0.0.4
+
 ## 0.0.3
 
 ### Patch Changes
