@@ -10,6 +10,7 @@ import type {
   BrowserAddToCartInput,
   BrowserBeginCheckoutInput,
   BrowserPurchaseInput,
+  BrowserRefundInput,
   BrowserSignUpInput,
   ClickIdentifiers,
   ConsentState,
@@ -219,4 +220,31 @@ export async function executeSignUp(
   }
 
   fireGa4(ctx, 'signUp', buildGa4Params({ transactionId, method: i.method }));
+}
+
+export async function executeRefund(
+  input: BrowserRefundInput,
+  ctx: BrowserHelperContext,
+): Promise<void> {
+  const transactionId = ctx.resolveTransactionId(input.transactionId);
+  await ctx.maybeSetUserData(input.userData);
+
+  // Refund is GA4-only in v1. We never call fireAdsConversion here, even
+  // if a consumer somehow set conversionLabels.refund via `as any` — the
+  // type system blocks the legitimate path.
+
+  fireGa4(
+    ctx,
+    'refund',
+    buildGa4Params({
+      transactionId,
+      value: input.value,
+      currency: input.currency,
+      items: input.items,
+      affiliation: input.affiliation,
+      coupon: input.coupon,
+      shipping: input.shipping,
+      tax: input.tax,
+    }),
+  );
 }

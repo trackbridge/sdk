@@ -386,3 +386,54 @@ describe('trackSignUp', () => {
     expect((ga4Call[2] as Record<string, unknown>).method).toBeUndefined();
   });
 });
+
+describe('trackRefund', () => {
+  test('fires GA4 refund event only — never fires Ads', async () => {
+    const { io, gtagCalls } = captureIO();
+    // Force a refund label via cast — mirrors runtime safety even when type-level guard is bypassed.
+    const tracker = createBrowserTracker(
+      baseConfig({
+        io,
+        conversionLabels: { refund: 'REFUND_LABEL' } as unknown as Record<string, string>,
+      } as BrowserTrackerConfig),
+    );
+
+    await tracker.trackRefund({
+      transactionId: 'order_42',
+      value: 99.99,
+      currency: 'USD',
+      items: [{ itemId: 'SKU-1' }],
+    });
+
+    expect(gtagCalls.find((c) => c[1] === 'conversion')).toBeUndefined();
+    const ga4Call = gtagCalls.find((c) => c[1] === 'refund')!;
+    const params = ga4Call[2] as Record<string, unknown>;
+    expect(params.transaction_id).toBe('order_42');
+    expect(params.value).toBe(99.99);
+    expect(params.items).toEqual([{ item_id: 'SKU-1' }]);
+  });
+
+  test('forwards optional refund fields into GA4 params', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    await tracker.trackRefund({
+      transactionId: 'order_42',
+      value: 50,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      affiliation: 'Acme',
+      coupon: 'X',
+      shipping: 5,
+      tax: 4,
+    });
+
+    const ga4Call = gtagCalls.find((c) => c[1] === 'refund')!;
+    expect(ga4Call[2]).toMatchObject({
+      affiliation: 'Acme',
+      coupon: 'X',
+      shipping: 5,
+      tax: 4,
+    });
+  });
+});
