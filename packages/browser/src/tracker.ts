@@ -13,6 +13,7 @@ import {
   parseClickIdentifiersFromCookies,
   parseClickIdentifiersFromUrl,
 } from './click-ids.js';
+import { executePurchase, type BrowserHelperContext } from './helpers.js';
 import type {
   BrowserAddToCartInput,
   BrowserBeginCheckoutInput,
@@ -88,6 +89,25 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     if (consent.ad_user_data !== 'granted') return;
     const built = await buildGtagUserData(userData);
     if (built !== undefined) io.gtag('set', 'user_data', built);
+  };
+
+  const conversionLabels = config.conversionLabels ?? {};
+  const resolveTransactionId = (incoming: string | undefined): string => {
+    if (incoming !== undefined && incoming !== '') return incoming;
+    const generated = generateTransactionId();
+    warnAutoTransactionId(generated);
+    return generated;
+  };
+
+  const helperContext: BrowserHelperContext = {
+    adsConversionId: config.adsConversionId,
+    conversionLabels,
+    debug: () => debug,
+    ids: () => ({ ...ids }),
+    consent: () => ({ ...consent }),
+    maybeSetUserData,
+    gtag: (...args) => io.gtag(...args),
+    resolveTransactionId,
   };
 
   return {
@@ -225,7 +245,9 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
         if (debug) console.warn('[trackbridge] gtag page_view failed:', err);
       }
     },
-    async trackPurchase(_input: BrowserPurchaseInput): Promise<void> {},
+    async trackPurchase(input: BrowserPurchaseInput): Promise<void> {
+      await executePurchase(input, helperContext);
+    },
     async trackBeginCheckout(_input?: BrowserBeginCheckoutInput): Promise<void> {},
     async trackAddToCart(_input?: BrowserAddToCartInput): Promise<void> {},
     async trackSignUp(_input?: BrowserSignUpInput): Promise<void> {},

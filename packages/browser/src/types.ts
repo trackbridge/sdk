@@ -93,6 +93,11 @@ export type BrowserPageViewInput = {
   // page_location is auto-filled from window.location.href; not configurable.
 };
 
+/**
+ * Input for `trackPurchase`. `transactionId` is required (no auto-generation) — purchase is
+ * the canonical dedup target between browser and server. Fires Ads when
+ * `config.conversionLabels.purchase` is set; GA4 always.
+ */
 export type BrowserPurchaseInput = {
   transactionId: string;
   value: number;
@@ -105,6 +110,10 @@ export type BrowserPurchaseInput = {
   userData?: UserData;
 };
 
+/**
+ * Input for `trackBeginCheckout`. All fields optional. `transactionId` auto-generates with a
+ * debug warn when omitted (per existing dedup rule).
+ */
 export type BrowserBeginCheckoutInput = {
   transactionId?: string;
   value?: number;
@@ -114,6 +123,9 @@ export type BrowserBeginCheckoutInput = {
   userData?: UserData;
 };
 
+/**
+ * Input for `trackAddToCart`. All fields optional.
+ */
 export type BrowserAddToCartInput = {
   transactionId?: string;
   value?: number;
@@ -122,12 +134,20 @@ export type BrowserAddToCartInput = {
   userData?: UserData;
 };
 
+/**
+ * Input for `trackSignUp`. `method` maps to GA4's `method` param (e.g., `'email'`, `'google'`).
+ */
 export type BrowserSignUpInput = {
   transactionId?: string;
   method?: string;
   userData?: UserData;
 };
 
+/**
+ * Input for `trackRefund`. `transactionId` is required to refund the original purchase by the
+ * same dedup key. Always fires GA4 only — `conversionLabels.refund` is intentionally not
+ * supported in v1.
+ */
 export type BrowserRefundInput = {
   transactionId: string;
   value?: number;
