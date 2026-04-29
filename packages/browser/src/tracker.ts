@@ -60,7 +60,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   const io = config.io ?? createDefaultBrowserIO();
   let debug = resolveInitialDebug(config, io);
   const generateTransactionId =
-    config.generateTransactionId ?? (() => `tb_${globalThis.crypto.randomUUID()}`);
+    config.generateTransactionId ?? defaultGenerateTransactionId;
   const now = config.now ?? (() => Date.now());
 
   // Replace the two-boolean state with a four-key record. The signals
@@ -277,6 +277,24 @@ function warnAutoTransactionId(id: string): void {
       `    to enable cross-side dedup.\n` +
       `  → See: https://docs.trackbridge.dev/sdk/concepts/deduplication/`,
   );
+}
+
+/**
+ * Default auto-generator for transactionId. Prefers `crypto.randomUUID`
+ * when WebCrypto is exposed globally (modern browsers, Node 19+); falls
+ * back to time + Math.random in environments without it (Node 18.x
+ * without `--experimental-global-webcrypto`, older jsdom test envs).
+ *
+ * The fallback is not crypto-grade — but transactionId is a dedup key,
+ * not a security primitive, so collision resistance from timestamp +
+ * randomness is sufficient. Consumers who care about cryptographic
+ * randomness pass their own `generateTransactionId` via config.
+ */
+function defaultGenerateTransactionId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return `tb_${globalThis.crypto.randomUUID()}`;
+  }
+  return `tb_${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 type GtagAddressEntry = {

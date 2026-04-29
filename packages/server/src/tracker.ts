@@ -80,7 +80,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
   const fetchImpl = config.fetch ?? globalThis.fetch;
   const now = config.now ?? (() => Date.now());
   const generateTransactionId =
-    config.generateTransactionId ?? (() => `tb_${globalThis.crypto.randomUUID()}`);
+    config.generateTransactionId ?? defaultGenerateTransactionId;
 
   let adsApiClient: AdsApiClient | null = null;
   if (config.ads !== undefined) {
@@ -423,6 +423,23 @@ function warnAutoTransactionId(id: string): void {
       `    to enable cross-side dedup.\n` +
       `  → See: https://docs.trackbridge.dev/sdk/concepts/deduplication/`,
   );
+}
+
+/**
+ * Default auto-generator for transactionId. Prefers `crypto.randomUUID`
+ * when WebCrypto is exposed globally (Node 19+); falls back to time +
+ * Math.random in environments without it (Node 18.x without
+ * `--experimental-global-webcrypto`).
+ *
+ * Not crypto-grade — but transactionId is a dedup key, not a security
+ * primitive. Consumers who care about cryptographic randomness pass
+ * their own `generateTransactionId` via config.
+ */
+function defaultGenerateTransactionId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return `tb_${globalThis.crypto.randomUUID()}`;
+  }
+  return `tb_${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function formatConversionDateTime(date: Date): string {
