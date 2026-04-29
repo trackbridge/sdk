@@ -10,6 +10,7 @@ import type {
   BrowserAddToCartInput,
   BrowserBeginCheckoutInput,
   BrowserPurchaseInput,
+  BrowserSignUpInput,
   ClickIdentifiers,
   ConsentState,
 } from './types.js';
@@ -202,4 +203,20 @@ export async function executeAddToCart(
       items: i.items,
     }),
   );
+}
+
+export async function executeSignUp(
+  input: BrowserSignUpInput | undefined,
+  ctx: BrowserHelperContext,
+): Promise<void> {
+  const i = input ?? {};
+  const transactionId = ctx.resolveTransactionId(i.transactionId);
+  await ctx.maybeSetUserData(i.userData);
+
+  const label = ctx.conversionLabels.signUp;
+  if (label !== undefined) {
+    fireAdsConversion(ctx, { label, transactionId });
+  }
+
+  fireGa4(ctx, 'signUp', buildGa4Params({ transactionId, method: i.method }));
 }

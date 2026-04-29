@@ -344,3 +344,45 @@ describe('trackAddToCart', () => {
     ]);
   });
 });
+
+describe('trackSignUp', () => {
+  test('fires both Ads and GA4 when signUp label configured (label-only Ads, no value/currency)', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(
+      baseConfig({ io, conversionLabels: { signUp: 'SIGNUP_LABEL' } }),
+    );
+
+    await tracker.trackSignUp({ transactionId: 'user_42', method: 'email' });
+
+    const adsCall = gtagCalls.find((c) => c[1] === 'conversion')!;
+    const adsParams = adsCall[2] as Record<string, unknown>;
+    expect(adsParams.send_to).toBe('AW-12345/SIGNUP_LABEL');
+    expect(adsParams.value).toBeUndefined();
+    expect(adsParams.currency).toBeUndefined();
+    expect(adsParams.transaction_id).toBe('user_42');
+
+    const ga4Call = gtagCalls.find((c) => c[1] === 'sign_up')!;
+    expect((ga4Call[2] as Record<string, unknown>).method).toBe('email');
+  });
+
+  test('fires GA4 only when label absent', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    await tracker.trackSignUp({ method: 'google' });
+
+    expect(gtagCalls.find((c) => c[1] === 'conversion')).toBeUndefined();
+    const ga4Call = gtagCalls.find((c) => c[1] === 'sign_up')!;
+    expect((ga4Call[2] as Record<string, unknown>).method).toBe('google');
+  });
+
+  test('omits method from GA4 params when not supplied', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    await tracker.trackSignUp();
+
+    const ga4Call = gtagCalls.find((c) => c[1] === 'sign_up')!;
+    expect((ga4Call[2] as Record<string, unknown>).method).toBeUndefined();
+  });
+});

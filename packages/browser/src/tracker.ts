@@ -17,6 +17,7 @@ import {
   executeAddToCart,
   executeBeginCheckout,
   executePurchase,
+  executeSignUp,
   type BrowserHelperContext,
 } from './helpers.js';
 import type {
@@ -259,7 +260,9 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     async trackAddToCart(input?: BrowserAddToCartInput): Promise<void> {
       await executeAddToCart(input, helperContext);
     },
-    async trackSignUp(_input?: BrowserSignUpInput): Promise<void> {},
+    async trackSignUp(input?: BrowserSignUpInput): Promise<void> {
+      await executeSignUp(input, helperContext);
+    },
     async trackRefund(_input: BrowserRefundInput): Promise<void> {},
   };
 }
