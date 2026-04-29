@@ -60,6 +60,8 @@ importers:
 
   packages/core: {}
 
+  packages/sdk: {}
+
   packages/server:
     dependencies:
       '@trackbridge/core':
