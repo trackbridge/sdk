@@ -95,3 +95,54 @@ export const GA4_EVENT_NAMES = {
 } as const;
 
 export type SemanticHelperName = keyof typeof GA4_EVENT_NAMES;
+
+/**
+ * Drops only `undefined` keys. Preserves `0`, `false`, `''`, and `null`
+ * so free purchases (`value: 0`), explicit clears, and empty strings
+ * reach the wire intact.
+ *
+ * Shared between browser and server helper modules — keeps the
+ * dual-send invariant from drifting silently if one side's local copy
+ * gets edited.
+ */
+export function dropUndefined<T extends Record<string, unknown>>(
+  obj: T,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Build the GA4 event-params object for a semantic helper. Same shape
+ * on browser (gtag third arg) and server (GA4 MP `events[].params`).
+ *
+ * `items` is undefined → key is omitted; `items: []` → key is preserved
+ * as `[]`. The distinction matters because GA4 treats a missing items
+ * array and an empty items array differently.
+ */
+export function buildGa4HelperParams(args: {
+  transactionId: string;
+  value?: number;
+  currency?: string;
+  items?: readonly TrackbridgeItem[];
+  affiliation?: string;
+  coupon?: string;
+  shipping?: number;
+  tax?: number;
+  method?: string;
+}): Record<string, unknown> {
+  return dropUndefined({
+    transaction_id: args.transactionId,
+    value: args.value,
+    currency: args.currency,
+    items: args.items === undefined ? undefined : mapItemsForGa4(args.items),
+    affiliation: args.affiliation,
+    coupon: args.coupon,
+    shipping: args.shipping,
+    tax: args.tax,
+    method: args.method,
+  });
+}

@@ -1,8 +1,8 @@
 import {
+  buildGa4HelperParams,
+  dropUndefined,
   GA4_EVENT_NAMES,
-  mapItemsForGa4,
   type SemanticHelperName,
-  type TrackbridgeItem,
   type UserData,
 } from '@trackbridge/core';
 
@@ -13,7 +13,6 @@ import type {
   BrowserRefundInput,
   BrowserSignUpInput,
   ClickIdentifiers,
-  ConsentState,
 } from './types.js';
 
 /**
@@ -31,48 +30,10 @@ export type BrowserHelperContext = {
   };
   readonly debug: () => boolean;
   readonly ids: () => ClickIdentifiers;
-  readonly consent: () => ConsentState;
   readonly maybeSetUserData: (userData: UserData | undefined) => Promise<void>;
   readonly gtag: (...args: unknown[]) => void;
   readonly resolveTransactionId: (input: string | undefined) => string;
 };
-
-/**
- * Drops only `undefined` keys. Preserves `0`, `false`, `''`, and `null`
- * so free purchases (`value: 0`), explicit clears, and empty strings
- * reach the wire intact.
- */
-function dropUndefined<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) out[k] = v;
-  }
-  return out;
-}
-
-function buildGa4Params(args: {
-  transactionId: string;
-  value?: number;
-  currency?: string;
-  items?: readonly TrackbridgeItem[];
-  affiliation?: string;
-  coupon?: string;
-  shipping?: number;
-  tax?: number;
-  method?: string;
-}): Record<string, unknown> {
-  return dropUndefined({
-    transaction_id: args.transactionId,
-    value: args.value,
-    currency: args.currency,
-    items: args.items === undefined ? undefined : mapItemsForGa4(args.items),
-    affiliation: args.affiliation,
-    coupon: args.coupon,
-    shipping: args.shipping,
-    tax: args.tax,
-    method: args.method,
-  });
-}
 
 function fireGa4(
   ctx: BrowserHelperContext,
@@ -132,7 +93,7 @@ export async function executePurchase(
   fireGa4(
     ctx,
     'purchase',
-    buildGa4Params({
+    buildGa4HelperParams({
       transactionId,
       value: input.value,
       currency: input.currency,
@@ -166,7 +127,7 @@ export async function executeBeginCheckout(
   fireGa4(
     ctx,
     'beginCheckout',
-    buildGa4Params({
+    buildGa4HelperParams({
       transactionId,
       value: i.value,
       currency: i.currency,
@@ -197,7 +158,7 @@ export async function executeAddToCart(
   fireGa4(
     ctx,
     'addToCart',
-    buildGa4Params({
+    buildGa4HelperParams({
       transactionId,
       value: i.value,
       currency: i.currency,
@@ -219,7 +180,7 @@ export async function executeSignUp(
     fireAdsConversion(ctx, { label, transactionId });
   }
 
-  fireGa4(ctx, 'signUp', buildGa4Params({ transactionId, method: i.method }));
+  fireGa4(ctx, 'signUp', buildGa4HelperParams({ transactionId, method: i.method }));
 }
 
 export async function executeRefund(
@@ -236,7 +197,7 @@ export async function executeRefund(
   fireGa4(
     ctx,
     'refund',
-    buildGa4Params({
+    buildGa4HelperParams({
       transactionId,
       value: input.value,
       currency: input.currency,

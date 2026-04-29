@@ -327,15 +327,15 @@ export type ServerRefundInput = {
  * Per-destination result for the helpers. Mirrors the existing
  * `SendResult` (`{ ok: true } | { ok: false; error: Error }`) plus a
  * `{ skipped: true; reason }` variant for cases where the helper
- * deliberately did not fire (no label configured, no GA4 measurement
- * ID, refund Ads unsupported in v1). Existing `SendResult` is unchanged.
+ * deliberately did not fire (no label configured, or refund Ads
+ * unsupported in v1). Existing `SendResult` is unchanged.
  */
 export type HelperSendResult =
   | { ok: true }
   | { ok: false; error: Error }
   | {
       skipped: true;
-      reason: 'no_label_configured' | 'no_measurement_id' | 'refund_ads_unsupported';
+      reason: 'no_label_configured' | 'refund_ads_unsupported';
     };
 
 export type ServerHelperResult = {

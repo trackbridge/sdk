@@ -204,7 +204,7 @@ The same five methods are on the server tracker (with required `clientId`) and o
 ```ts
 const result = await serverTracker.trackPurchase({ /* ... */ });
 // result.ads: { ok: true } | { ok: false; error } | { skipped: true; reason: 'no_label_configured' | 'refund_ads_unsupported' }
-// result.ga4: { ok: true } | { ok: false; error } | { skipped: true; reason: 'no_measurement_id' }
+// result.ga4: { ok: true } | { ok: false; error }
 ```
 
 `trackRefund` always skips Ads in v1 — refund Ads adjustments require the `uploadConversionAdjustments` API and are out of scope for this release. The GA4 `refund` event fires normally.

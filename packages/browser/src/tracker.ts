@@ -111,7 +111,6 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     conversionLabels,
     debug: () => debug,
     ids: () => ({ ...ids }),
-    consent: () => ({ ...consent }),
     maybeSetUserData,
     gtag: (...args) => io.gtag(...args),
     resolveTransactionId,
@@ -272,7 +271,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
 
 function warnAutoTransactionId(id: string): void {
   console.warn(
-    `[trackbridge] ⚠️ trackConversion called without transactionId\n` +
+    `[trackbridge] ⚠️ called without transactionId\n` +
       `  → Auto-generated: ${id}\n` +
       `  → Dual-send disabled for this call. Pass a transactionId you control\n` +
       `    to enable cross-side dedup.\n` +

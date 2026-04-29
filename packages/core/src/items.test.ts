@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'vitest';
 
-import { mapItemsForGa4, GA4_EVENT_NAMES, type TrackbridgeItem } from './items.js';
+import {
+  buildGa4HelperParams,
+  dropUndefined,
+  mapItemsForGa4,
+  GA4_EVENT_NAMES,
+  type TrackbridgeItem,
+} from './items.js';
 
 describe('mapItemsForGa4', () => {
   test('empty array → empty array', () => {
@@ -116,5 +122,73 @@ describe('GA4_EVENT_NAMES', () => {
       signUp: 'sign_up',
       refund: 'refund',
     });
+  });
+});
+
+describe('dropUndefined', () => {
+  test('drops only undefined keys; preserves 0, false, "", null', () => {
+    expect(
+      dropUndefined({
+        a: 0,
+        b: false,
+        c: '',
+        d: null,
+        e: undefined,
+        f: 'kept',
+      }),
+    ).toEqual({ a: 0, b: false, c: '', d: null, f: 'kept' });
+  });
+
+  test('empty object → empty object', () => {
+    expect(dropUndefined({})).toEqual({});
+  });
+});
+
+describe('buildGa4HelperParams', () => {
+  test('omits items key when input items is undefined; preserves [] when empty', () => {
+    expect(buildGa4HelperParams({ transactionId: 'x' })).toEqual({ transaction_id: 'x' });
+
+    expect(buildGa4HelperParams({ transactionId: 'x', items: [] })).toEqual({
+      transaction_id: 'x',
+      items: [],
+    });
+  });
+
+  test('full populated input maps to exact wire shape', () => {
+    expect(
+      buildGa4HelperParams({
+        transactionId: 'order_42',
+        value: 99.99,
+        currency: 'USD',
+        items: [{ itemId: 'sku-1', itemName: 'Widget', price: 99.99 }],
+        affiliation: 'Acme',
+        coupon: 'X',
+        shipping: 5,
+        tax: 4,
+        method: 'email',
+      }),
+    ).toEqual({
+      transaction_id: 'order_42',
+      value: 99.99,
+      currency: 'USD',
+      items: [{ item_id: 'sku-1', item_name: 'Widget', price: 99.99 }],
+      affiliation: 'Acme',
+      coupon: 'X',
+      shipping: 5,
+      tax: 4,
+      method: 'email',
+    });
+  });
+
+  test('preserves value: 0 (free purchase) and zero-valued numeric fields', () => {
+    const out = buildGa4HelperParams({
+      transactionId: 'free',
+      value: 0,
+      currency: 'USD',
+      shipping: 0,
+      tax: 0,
+    });
+    expect(out).toMatchObject({ value: 0, shipping: 0, tax: 0 });
+    expect(typeof out.value).toBe('number');
   });
 });

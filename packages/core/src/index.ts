@@ -28,6 +28,8 @@ export { normalizeEmail } from './normalize/email.js';
 export { normalizeName } from './normalize/name.js';
 export { normalizePhone } from './normalize/phone.js';
 export {
+  buildGa4HelperParams,
+  dropUndefined,
   mapItemsForGa4,
   GA4_EVENT_NAMES,
   type SemanticHelperName,

@@ -398,8 +398,6 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
   const helperContext: ServerHelperContext = {
     underlying: tracker,
     conversionLabels: config.conversionLabels ?? {},
-    hasMeasurementId: Boolean(config.ga4MeasurementId),
-    hasAds: config.ads !== undefined && adsApiClient !== null,
     resolveTransactionId: (incoming) => {
       if (incoming !== undefined && incoming !== '') return incoming;
       const generated = generateTransactionId();
@@ -419,7 +417,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
 
 function warnAutoTransactionId(id: string): void {
   console.warn(
-    `[trackbridge] ⚠️ trackConversion called without transactionId\n` +
+    `[trackbridge] ⚠️ called without transactionId\n` +
       `  → Auto-generated: ${id}\n` +
       `  → Dual-send disabled for this call. Pass a transactionId you control\n` +
       `    to enable cross-side dedup.\n` +
