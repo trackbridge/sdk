@@ -7,6 +7,7 @@ import {
 } from '@trackbridge/core';
 
 import type {
+  BrowserAddToCartInput,
   BrowserBeginCheckoutInput,
   BrowserPurchaseInput,
   ClickIdentifiers,
@@ -169,6 +170,36 @@ export async function executeBeginCheckout(
       currency: i.currency,
       items: i.items,
       coupon: i.coupon,
+    }),
+  );
+}
+
+export async function executeAddToCart(
+  input: BrowserAddToCartInput | undefined,
+  ctx: BrowserHelperContext,
+): Promise<void> {
+  const i = input ?? {};
+  const transactionId = ctx.resolveTransactionId(i.transactionId);
+  await ctx.maybeSetUserData(i.userData);
+
+  const label = ctx.conversionLabels.addToCart;
+  if (label !== undefined) {
+    fireAdsConversion(ctx, {
+      label,
+      transactionId,
+      value: i.value,
+      currency: i.currency,
+    });
+  }
+
+  fireGa4(
+    ctx,
+    'addToCart',
+    buildGa4Params({
+      transactionId,
+      value: i.value,
+      currency: i.currency,
+      items: i.items,
     }),
   );
 }

@@ -288,3 +288,59 @@ describe('trackBeginCheckout', () => {
     expect((ga4Call[2] as Record<string, unknown>).transaction_id).toBe('tb_auto-cart');
   });
 });
+
+describe('trackAddToCart', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
+  test('fires both Ads and GA4 when label configured', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(
+      baseConfig({ io, conversionLabels: { addToCart: 'CART_LABEL' } }),
+    );
+
+    await tracker.trackAddToCart({
+      transactionId: 'cart_42',
+      value: 25,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+    });
+
+    expect(gtagCalls.find((c) => c[1] === 'conversion')).toBeDefined();
+    expect(gtagCalls.find((c) => c[1] === 'add_to_cart')).toBeDefined();
+  });
+
+  test('fires GA4 only when label absent', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    await tracker.trackAddToCart({
+      value: 25,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+    });
+
+    expect(gtagCalls.find((c) => c[1] === 'conversion')).toBeUndefined();
+    expect(gtagCalls.find((c) => c[1] === 'add_to_cart')).toBeDefined();
+  });
+
+  test('items array is snake_case-mapped on GA4 call', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    await tracker.trackAddToCart({
+      value: 25,
+      currency: 'USD',
+      items: [{ itemId: 'sku-1', itemName: 'Widget', itemBrand: 'Acme' }],
+    });
+
+    const ga4Call = gtagCalls.find((c) => c[1] === 'add_to_cart')!;
+    const params = ga4Call[2] as Record<string, unknown>;
+    expect(params.items).toEqual([
+      { item_id: 'sku-1', item_name: 'Widget', item_brand: 'Acme' },
+    ]);
+  });
+});
