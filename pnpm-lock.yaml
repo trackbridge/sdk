@@ -27,21 +27,7 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
 
-  packages/browser:
-    dependencies:
-      '@trackbridge/core':
-        specifier: workspace:*
-        version: link:../core
-
-  packages/core: {}
-
   packages/sdk: {}
-
-  packages/server:
-    dependencies:
-      '@trackbridge/core':
-        specifier: workspace:*
-        version: link:../core
 
 packages:
 
