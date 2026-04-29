@@ -1,0 +1,37 @@
+{
+  "name": "@trackbridge/sdk",
+  "version": "0.1.0",
+  "description": "Dual-send conversion tracking for Google Ads and GA4 — browser, server, and (soon) Next.js.",
+  "license": "MIT",
+  "homepage": "https://trackbridge.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trackbridge/sdk.git",
+    "directory": "packages/sdk"
+  },
+  "type": "module",
+  "exports": {
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "import": "./dist/browser/index.js",
+      "require": "./dist/browser/index.cjs"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p src/core/tsconfig.test.json && tsc --noEmit -p src/browser/tsconfig.test.json && tsc --noEmit -p src/server/tsconfig.test.json"
+  },
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=18.17.0" },
+  "sideEffects": false
+}

@@ -1,0 +1,211 @@
+import {
+  buildGa4HelperParams,
+  dropUndefined,
+  GA4_EVENT_NAMES,
+  type SemanticHelperName,
+  type UserData,
+} from '../core/index.js';
+
+import type {
+  BrowserAddToCartInput,
+  BrowserBeginCheckoutInput,
+  BrowserPurchaseInput,
+  BrowserRefundInput,
+  BrowserSignUpInput,
+  ClickIdentifiers,
+} from './types.js';
+
+/**
+ * Closure-bound state passed from `createBrowserTracker` into each
+ * helper. Mirrors the dependencies that `trackEvent` / `trackConversion`
+ * already use.
+ */
+export type BrowserHelperContext = {
+  readonly adsConversionId: string;
+  readonly conversionLabels: {
+    purchase?: string;
+    beginCheckout?: string;
+    addToCart?: string;
+    signUp?: string;
+  };
+  readonly debug: () => boolean;
+  readonly ids: () => ClickIdentifiers;
+  readonly maybeSetUserData: (userData: UserData | undefined) => Promise<void>;
+  readonly gtag: (...args: unknown[]) => void;
+  readonly resolveTransactionId: (input: string | undefined) => string;
+};
+
+function fireGa4(
+  ctx: BrowserHelperContext,
+  helperName: SemanticHelperName,
+  params: Record<string, unknown>,
+): void {
+  try {
+    ctx.gtag('event', GA4_EVENT_NAMES[helperName], params);
+  } catch (err) {
+    if (ctx.debug()) console.warn(`[trackbridge] gtag ${helperName} GA4 failed:`, err);
+  }
+}
+
+function fireAdsConversion(
+  ctx: BrowserHelperContext,
+  args: {
+    label: string;
+    transactionId: string;
+    value?: number;
+    currency?: string;
+  },
+): void {
+  const ids = ctx.ids();
+  const params = dropUndefined({
+    send_to: `${ctx.adsConversionId}/${args.label}`,
+    transaction_id: args.transactionId,
+    value: args.value,
+    currency: args.currency,
+    gclid: ids.gclid,
+    gbraid: ids.gbraid,
+    wbraid: ids.wbraid,
+  });
+  try {
+    ctx.gtag('event', 'conversion', params);
+  } catch (err) {
+    if (ctx.debug()) console.warn('[trackbridge] gtag conversion (helper) failed:', err);
+  }
+}
+
+export async function executePurchase(
+  input: BrowserPurchaseInput,
+  ctx: BrowserHelperContext,
+): Promise<void> {
+  const transactionId = ctx.resolveTransactionId(input.transactionId);
+  await ctx.maybeSetUserData(input.userData);
+
+  const label = ctx.conversionLabels.purchase;
+  if (label !== undefined) {
+    fireAdsConversion(ctx, {
+      label,
+      transactionId,
+      value: input.value,
+      currency: input.currency,
+    });
+  }
+
+  fireGa4(
+    ctx,
+    'purchase',
+    buildGa4HelperParams({
+      transactionId,
+      value: input.value,
+      currency: input.currency,
+      items: input.items,
+      affiliation: input.affiliation,
+      coupon: input.coupon,
+      shipping: input.shipping,
+      tax: input.tax,
+    }),
+  );
+}
+
+export async function executeBeginCheckout(
+  input: BrowserBeginCheckoutInput | undefined,
+  ctx: BrowserHelperContext,
+): Promise<void> {
+  const i = input ?? {};
+  const transactionId = ctx.resolveTransactionId(i.transactionId);
+  await ctx.maybeSetUserData(i.userData);
+
+  const label = ctx.conversionLabels.beginCheckout;
+  if (label !== undefined) {
+    fireAdsConversion(ctx, {
+      label,
+      transactionId,
+      value: i.value,
+      currency: i.currency,
+    });
+  }
+
+  fireGa4(
+    ctx,
+    'beginCheckout',
+    buildGa4HelperParams({
+      transactionId,
+      value: i.value,
+      currency: i.currency,
+      items: i.items,
+      coupon: i.coupon,
+    }),
+  );
+}
+
+export async function executeAddToCart(
+  input: BrowserAddToCartInput | undefined,
+  ctx: BrowserHelperContext,
+): Promise<void> {
+  const i = input ?? {};
+  const transactionId = ctx.resolveTransactionId(i.transactionId);
+  await ctx.maybeSetUserData(i.userData);
+
+  const label = ctx.conversionLabels.addToCart;
+  if (label !== undefined) {
+    fireAdsConversion(ctx, {
+      label,
+      transactionId,
+      value: i.value,
+      currency: i.currency,
+    });
+  }
+
+  fireGa4(
+    ctx,
+    'addToCart',
+    buildGa4HelperParams({
+      transactionId,
+      value: i.value,
+      currency: i.currency,
+      items: i.items,
+    }),
+  );
+}
+
+export async function executeSignUp(
+  input: BrowserSignUpInput | undefined,
+  ctx: BrowserHelperContext,
+): Promise<void> {
+  const i = input ?? {};
+  const transactionId = ctx.resolveTransactionId(i.transactionId);
+  await ctx.maybeSetUserData(i.userData);
+
+  const label = ctx.conversionLabels.signUp;
+  if (label !== undefined) {
+    fireAdsConversion(ctx, { label, transactionId });
+  }
+
+  fireGa4(ctx, 'signUp', buildGa4HelperParams({ transactionId, method: i.method }));
+}
+
+export async function executeRefund(
+  input: BrowserRefundInput,
+  ctx: BrowserHelperContext,
+): Promise<void> {
+  const transactionId = ctx.resolveTransactionId(input.transactionId);
+  await ctx.maybeSetUserData(input.userData);
+
+  // Refund is GA4-only in v1. We never call fireAdsConversion here, even
+  // if a consumer somehow set conversionLabels.refund via `as any` — the
+  // type system blocks the legitimate path.
+
+  fireGa4(
+    ctx,
+    'refund',
+    buildGa4HelperParams({
+      transactionId,
+      value: input.value,
+      currency: input.currency,
+      items: input.items,
+      affiliation: input.affiliation,
+      coupon: input.coupon,
+      shipping: input.shipping,
+      tax: input.tax,
+    }),
+  );
+}

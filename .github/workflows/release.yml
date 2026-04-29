@@ -61,9 +61,9 @@ jobs:
           commit: 'chore: version packages'
           title: 'chore: version packages'
           # After each successful publish, also create a GitHub Release per
-          # package using the changelog body. Three releases per cycle (one
-          # per linked package); publish-changelog-to-docs.yml deduplicates
-          # by firing only on the @trackbridge/core release.
+          # package using the changelog body. With the consolidated
+          # single-package layout, that's one release per cycle for
+          # @trackbridge/sdk; publish-changelog-to-docs.yml fires on it.
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
