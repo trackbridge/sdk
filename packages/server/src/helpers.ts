@@ -13,6 +13,7 @@ import type {
   ServerConsent,
   ServerHelperResult,
   ServerPurchaseInput,
+  ServerRefundInput,
   ServerSignUpInput,
   ServerTracker,
 } from './types.js';
@@ -282,5 +283,38 @@ export async function executeSignUp(
   });
 
   const [ads, ga4] = await Promise.all([adsP, ga4P]);
+  return { ads, ga4 };
+}
+
+export async function executeRefund(
+  input: ServerRefundInput,
+  ctx: ServerHelperContext,
+): Promise<ServerHelperResult> {
+  const transactionId = ctx.resolveTransactionId(input.transactionId);
+
+  // Refund Ads adjustments are out of scope for v1 — always skipped.
+  // Even if a consumer forces `conversionLabels.refund` via `as any`, this
+  // helper never fires Ads. The Ads-side `uploadConversionAdjustments` API
+  // is a separate code path; revisit when a real consumer needs it.
+  const ads: HelperSendResult = { skipped: true, reason: 'refund_ads_unsupported' };
+
+  const ga4 = await fireGa4(ctx, {
+    helperName: 'refund',
+    params: buildGa4Params({
+      transactionId,
+      value: input.value,
+      currency: input.currency,
+      items: input.items,
+      affiliation: input.affiliation,
+      coupon: input.coupon,
+      shipping: input.shipping,
+      tax: input.tax,
+    }),
+    clientId: input.clientId,
+    userId: input.userId,
+    userData: input.userData,
+    consent: input.consent,
+  });
+
   return { ads, ga4 };
 }

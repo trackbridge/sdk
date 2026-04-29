@@ -313,3 +313,37 @@ describe('serverTracker.trackSignUp', () => {
     expect(calls.some((c) => c.url.includes('googleads'))).toBe(true);
   });
 });
+
+describe('serverTracker.trackRefund', () => {
+  test('fires GA4 refund event, ads always skipped with refund_ads_unsupported reason', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(
+      baseConfig({
+        fetch: fn,
+        ads: baseAds,
+        // conversionLabels intentionally has only `purchase` — `refund` is not part of the type.
+        conversionLabels: { purchase: 'PURCHASE_LABEL' },
+      }),
+    );
+
+    const result = await tracker.trackRefund({
+      transactionId: 'order_42',
+      value: 99.99,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      clientId: '1.2',
+    });
+
+    expect(result.ads).toEqual({ skipped: true, reason: 'refund_ads_unsupported' });
+    expect(result.ga4).toEqual({ ok: true });
+
+    const ga4Call = calls.find((c) => c.url.includes('/mp/collect'))!;
+    const body = ga4Call.body as { events: Array<{ name: string; params: Record<string, unknown> }> };
+    expect(body.events[0]!.name).toBe('refund');
+    expect(body.events[0]!.params.transaction_id).toBe('order_42');
+    expect(body.events[0]!.params.value).toBe(99.99);
+
+    // No Ads upload call hit
+    expect(calls.some((c) => c.url.includes('googleads'))).toBe(false);
+  });
+});
