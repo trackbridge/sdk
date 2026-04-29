@@ -33,11 +33,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Build before typecheck: @trackbridge/sdk's subpath exports
-      # (./browser, ./server) resolve their `.d.ts` files out of dist/
-      # via the package.json `exports` map. On a fresh checkout those
-      # files do not exist until the package is built, so typecheck
-      # must run after build.
+      # Build first — tsup's dts emission is a stricter check on the
+      # public API surface than `tsc --noEmit` against the test tsconfigs.
       - name: Build
         run: pnpm build
 
