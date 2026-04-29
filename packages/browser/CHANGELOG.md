@@ -1,5 +1,16 @@
 # @trackbridge/browser
 
+## 0.2.0
+
+### Minor Changes
+
+- 55c2e94: Add `TrackbridgeContext` envelope and `serverTracker.fromContext(envelope)` for delayed/webhook conversions. Browser gets `tracker.exportContext()` and `tracker.getSessionId()`. Server gains a `userId?` field on `ServerEventInput` (maps to GA4 MP `user_id`) and a `ContextBoundServerTracker` returned by `fromContext`. Consent types (`ConsentValue`, `ConsentUpdate`, `ConsentState`) relocated from `@trackbridge/browser` to `@trackbridge/core` — browser re-exports preserve existing import paths. `ServerConsent` value union widened to include `'unknown'` (strict superset; existing callers typecheck unchanged).
+
+### Patch Changes
+
+- Updated dependencies [55c2e94]
+  - @trackbridge/core@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
