@@ -14,10 +14,15 @@ import {
   parseClickIdentifiersFromUrl,
 } from './click-ids.js';
 import type {
+  BrowserAddToCartInput,
+  BrowserBeginCheckoutInput,
   BrowserConversionInput,
   BrowserEventInput,
   BrowserIO,
   BrowserPageViewInput,
+  BrowserPurchaseInput,
+  BrowserRefundInput,
+  BrowserSignUpInput,
   BrowserTracker,
   BrowserTrackerConfig,
   ClickIdentifiers,
@@ -220,6 +225,11 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
         if (debug) console.warn('[trackbridge] gtag page_view failed:', err);
       }
     },
+    async trackPurchase(_input: BrowserPurchaseInput): Promise<void> {},
+    async trackBeginCheckout(_input?: BrowserBeginCheckoutInput): Promise<void> {},
+    async trackAddToCart(_input?: BrowserAddToCartInput): Promise<void> {},
+    async trackSignUp(_input?: BrowserSignUpInput): Promise<void> {},
+    async trackRefund(_input: BrowserRefundInput): Promise<void> {},
   };
 }
 

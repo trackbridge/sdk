@@ -35,7 +35,7 @@ export type BrowserIO = {
   gtag(...args: unknown[]): void;
 };
 
-import type { ConsentState, ConsentUpdate, TrackbridgeContext, UserData } from '@trackbridge/core';
+import type { ConsentState, ConsentUpdate, TrackbridgeContext, TrackbridgeItem, UserData } from '@trackbridge/core';
 export type { ConsentValue, ConsentUpdate, ConsentState } from '@trackbridge/core';
 
 /**
@@ -93,6 +93,53 @@ export type BrowserPageViewInput = {
   // page_location is auto-filled from window.location.href; not configurable.
 };
 
+export type BrowserPurchaseInput = {
+  transactionId: string;
+  value: number;
+  currency: string;
+  items: TrackbridgeItem[];
+  affiliation?: string;
+  coupon?: string;
+  shipping?: number;
+  tax?: number;
+  userData?: UserData;
+};
+
+export type BrowserBeginCheckoutInput = {
+  transactionId?: string;
+  value?: number;
+  currency?: string;
+  items?: TrackbridgeItem[];
+  coupon?: string;
+  userData?: UserData;
+};
+
+export type BrowserAddToCartInput = {
+  transactionId?: string;
+  value?: number;
+  currency?: string;
+  items?: TrackbridgeItem[];
+  userData?: UserData;
+};
+
+export type BrowserSignUpInput = {
+  transactionId?: string;
+  method?: string;
+  userData?: UserData;
+};
+
+export type BrowserRefundInput = {
+  transactionId: string;
+  value?: number;
+  currency?: string;
+  items?: TrackbridgeItem[];
+  affiliation?: string;
+  coupon?: string;
+  shipping?: number;
+  tax?: number;
+  userData?: UserData;
+};
+
 export type BrowserTrackerConfig = {
   adsConversionId: string;
   ga4MeasurementId?: string;
@@ -126,6 +173,20 @@ export type BrowserTrackerConfig = {
    * `createdAt` timestamp.
    */
   now?: () => number;
+  /**
+   * Per-helper Ads conversion labels. When a helper's key is present,
+   * the helper fires both an Ads conversion (with this label) and a
+   * GA4 event. When absent, the helper fires GA4 only.
+   *
+   * `refund` key intentionally absent — refund Ads adjustments are out
+   * of scope for v1.
+   */
+  conversionLabels?: {
+    purchase?: string;
+    beginCheckout?: string;
+    addToCart?: string;
+    signUp?: string;
+  };
 };
 
 export type BrowserTracker = {
@@ -200,4 +261,9 @@ export type BrowserTracker = {
    * No-op if `ga4MeasurementId` is unset (debug-warn under `debug: true`).
    */
   trackPageView(input?: BrowserPageViewInput): Promise<void>;
+  trackPurchase(input: BrowserPurchaseInput): Promise<void>;
+  trackBeginCheckout(input?: BrowserBeginCheckoutInput): Promise<void>;
+  trackAddToCart(input?: BrowserAddToCartInput): Promise<void>;
+  trackSignUp(input?: BrowserSignUpInput): Promise<void>;
+  trackRefund(input: BrowserRefundInput): Promise<void>;
 };
