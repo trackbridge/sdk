@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 
 import { createServerTracker } from './tracker.js';
 import type { ServerAdsConfig, ServerTrackerConfig } from './types.js';
@@ -153,5 +153,54 @@ describe('serverTracker.trackPurchase', () => {
       shipping: 5,
       tax: 4,
     });
+  });
+});
+
+describe('serverTracker.trackBeginCheckout', () => {
+  test('fires GA4 begin_checkout with mapped items, skips Ads without label', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(baseConfig({ fetch: fn }));
+
+    const result = await tracker.trackBeginCheckout({
+      transactionId: 'cart_42',
+      value: 50,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      coupon: 'SAVE5',
+      clientId: '1.2',
+    });
+
+    expect(result.ads).toEqual({ skipped: true, reason: 'no_label_configured' });
+    expect(result.ga4).toEqual({ ok: true });
+
+    const ga4Call = calls.find((c) => c.url.includes('/mp/collect'))!;
+    const body = ga4Call.body as { events: Array<{ name: string; params: Record<string, unknown> }> };
+    expect(body.events[0]!.name).toBe('begin_checkout');
+    expect(body.events[0]!.params).toMatchObject({
+      transaction_id: 'cart_42',
+      coupon: 'SAVE5',
+      items: [{ item_id: 'a' }],
+    });
+  });
+
+  test('auto-generates transactionId when omitted', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { fn, calls } = captureFetch();
+      const tracker = createServerTracker(
+        baseConfig({
+          fetch: fn,
+          generateTransactionId: () => 'tb_auto-cart',
+        }),
+      );
+
+      await tracker.trackBeginCheckout({ clientId: '1.2' });
+
+      const ga4Call = calls.find((c) => c.url.includes('/mp/collect'))!;
+      const body = ga4Call.body as { events: Array<{ params: Record<string, unknown> }> };
+      expect(body.events[0]!.params.transaction_id).toBe('tb_auto-cart');
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

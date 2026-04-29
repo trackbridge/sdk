@@ -8,6 +8,7 @@ import {
 
 import type {
   HelperSendResult,
+  ServerBeginCheckoutInput,
   ServerConsent,
   ServerHelperResult,
   ServerPurchaseInput,
@@ -155,6 +156,47 @@ export async function executePurchase(
       coupon: input.coupon,
       shipping: input.shipping,
       tax: input.tax,
+    }),
+    clientId: input.clientId,
+    userId: input.userId,
+    userData: input.userData,
+    consent: input.consent,
+  });
+
+  const [ads, ga4] = await Promise.all([adsP, ga4P]);
+  return { ads, ga4 };
+}
+
+export async function executeBeginCheckout(
+  input: ServerBeginCheckoutInput,
+  ctx: ServerHelperContext,
+): Promise<ServerHelperResult> {
+  const transactionId = ctx.resolveTransactionId(input.transactionId);
+
+  const adsP: Promise<HelperSendResult> = (async () => {
+    const label = ctx.conversionLabels.beginCheckout;
+    if (label === undefined) return { skipped: true, reason: 'no_label_configured' };
+    return fireAdsConversion(ctx, {
+      label,
+      transactionId,
+      value: input.value,
+      currency: input.currency,
+      gclid: input.gclid,
+      gbraid: input.gbraid,
+      wbraid: input.wbraid,
+      userData: input.userData,
+      consent: input.consent,
+    });
+  })();
+
+  const ga4P = fireGa4(ctx, {
+    helperName: 'beginCheckout',
+    params: buildGa4Params({
+      transactionId,
+      value: input.value,
+      currency: input.currency,
+      items: input.items,
+      coupon: input.coupon,
     }),
     clientId: input.clientId,
     userId: input.userId,
