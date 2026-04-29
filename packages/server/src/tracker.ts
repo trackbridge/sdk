@@ -15,11 +15,17 @@ import type {
   BoundServerEventInput,
   ContextBoundServerTracker,
   SendResult,
+  ServerAddToCartInput,
+  ServerBeginCheckoutInput,
   ServerConsent,
   ServerConversionInput,
   ServerConversionResult,
   ServerEventInput,
   ServerEventResult,
+  ServerHelperResult,
+  ServerPurchaseInput,
+  ServerRefundInput,
+  ServerSignUpInput,
   ServerTracker,
   ServerTrackerConfig,
 } from './types.js';
@@ -238,7 +244,38 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
             consent: input.consent ?? env.consent,
           });
         },
+        async trackPurchase(input) {
+          return tracker.trackPurchase({ clientId: env.clientId ?? '', ...input });
+        },
+        async trackBeginCheckout(input?) {
+          return tracker.trackBeginCheckout({ clientId: env.clientId ?? '', ...(input ?? {}) });
+        },
+        async trackAddToCart(input?) {
+          return tracker.trackAddToCart({ clientId: env.clientId ?? '', ...(input ?? {}) });
+        },
+        async trackSignUp(input?) {
+          return tracker.trackSignUp({ clientId: env.clientId ?? '', ...(input ?? {}) });
+        },
+        async trackRefund(input) {
+          return tracker.trackRefund({ clientId: env.clientId ?? '', ...input });
+        },
       };
+    },
+
+    async trackPurchase(_input: ServerPurchaseInput): Promise<ServerHelperResult> {
+      return { ads: { skipped: true, reason: 'no_label_configured' }, ga4: { ok: true } };
+    },
+    async trackBeginCheckout(_input: ServerBeginCheckoutInput): Promise<ServerHelperResult> {
+      return { ads: { skipped: true, reason: 'no_label_configured' }, ga4: { ok: true } };
+    },
+    async trackAddToCart(_input: ServerAddToCartInput): Promise<ServerHelperResult> {
+      return { ads: { skipped: true, reason: 'no_label_configured' }, ga4: { ok: true } };
+    },
+    async trackSignUp(_input: ServerSignUpInput): Promise<ServerHelperResult> {
+      return { ads: { skipped: true, reason: 'no_label_configured' }, ga4: { ok: true } };
+    },
+    async trackRefund(_input: ServerRefundInput): Promise<ServerHelperResult> {
+      return { ads: { skipped: true, reason: 'refund_ads_unsupported' }, ga4: { ok: true } };
     },
   };
   return tracker;

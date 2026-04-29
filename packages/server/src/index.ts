@@ -9,18 +9,30 @@ export const VERSION = '0.0.1';
 
 export { createServerTracker } from './tracker.js';
 export type {
+  BoundAddToCartInput,
+  BoundBeginCheckoutInput,
+  BoundPurchaseInput,
+  BoundRefundInput,
   BoundServerConversionInput,
   BoundServerEventInput,
+  BoundSignUpInput,
   ConsentValue,
   ContextBoundServerTracker,
+  HelperSendResult,
   SendResult,
+  ServerAddToCartInput,
   ServerAdsConfig,
+  ServerBeginCheckoutInput,
   ServerConsent,
   ServerConversionInput,
   ServerConversionResult,
   ServerEventInput,
   ServerEventResult,
+  ServerHelperResult,
+  ServerPurchaseInput,
+  ServerRefundInput,
+  ServerSignUpInput,
   ServerTracker,
   ServerTrackerConfig,
 } from './types.js';
-export type { TrackbridgeContext } from '@trackbridge/core';
+export type { TrackbridgeContext, TrackbridgeItem } from '@trackbridge/core';
