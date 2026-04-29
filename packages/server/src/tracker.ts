@@ -19,8 +19,13 @@ import {
 } from './helpers.js';
 import { createAccessTokenProvider } from './oauth.js';
 import type {
+  BoundAddToCartInput,
+  BoundBeginCheckoutInput,
+  BoundPurchaseInput,
+  BoundRefundInput,
   BoundServerConversionInput,
   BoundServerEventInput,
+  BoundSignUpInput,
   ContextBoundServerTracker,
   SendResult,
   ServerAddToCartInput,
@@ -252,25 +257,122 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
             consent: input.consent ?? env.consent,
           });
         },
-        // Plan Task 16 replaces these bound stubs with envelope-merging implementations
-        // (clientId / click IDs / userId / userData / consent merged from envelope, with
-        // input overriding on conflict — same precedence as `trackEvent` / `trackConversion`
-        // above). The `?? ''` placeholders are build-green only — outer-tracker stubs
-        // don't fire, so empty strings never reach the wire. Do NOT ship as-is.
-        async trackPurchase(input) {
-          return tracker.trackPurchase({ clientId: env.clientId ?? '', ...input });
+        async trackPurchase(input: BoundPurchaseInput): Promise<ServerHelperResult> {
+          const clientId = input.clientId ?? env.clientId;
+          if (clientId === undefined) {
+            throw new Error(
+              '[trackbridge] fromContext-bound trackPurchase called without clientId — ' +
+                'envelope did not capture one and input did not supply one',
+            );
+          }
+          return tracker.trackPurchase({
+            transactionId: input.transactionId,
+            value: input.value,
+            currency: input.currency,
+            items: input.items,
+            affiliation: input.affiliation,
+            coupon: input.coupon,
+            shipping: input.shipping,
+            tax: input.tax,
+            clientId,
+            userId: input.userId ?? env.userId,
+            gclid: input.gclid ?? env.clickIds.gclid,
+            gbraid: input.gbraid ?? env.clickIds.gbraid,
+            wbraid: input.wbraid ?? env.clickIds.wbraid,
+            userData: input.userData ?? env.userData,
+            consent: input.consent ?? env.consent,
+          });
         },
-        async trackBeginCheckout(input?) {
-          return tracker.trackBeginCheckout({ clientId: env.clientId ?? '', ...(input ?? {}) });
+        async trackBeginCheckout(input?: BoundBeginCheckoutInput): Promise<ServerHelperResult> {
+          const i = input ?? {};
+          const clientId = i.clientId ?? env.clientId;
+          if (clientId === undefined) {
+            throw new Error(
+              '[trackbridge] fromContext-bound trackBeginCheckout called without clientId — ' +
+                'envelope did not capture one and input did not supply one',
+            );
+          }
+          return tracker.trackBeginCheckout({
+            transactionId: i.transactionId,
+            value: i.value,
+            currency: i.currency,
+            items: i.items,
+            coupon: i.coupon,
+            clientId,
+            userId: i.userId ?? env.userId,
+            gclid: i.gclid ?? env.clickIds.gclid,
+            gbraid: i.gbraid ?? env.clickIds.gbraid,
+            wbraid: i.wbraid ?? env.clickIds.wbraid,
+            userData: i.userData ?? env.userData,
+            consent: i.consent ?? env.consent,
+          });
         },
-        async trackAddToCart(input?) {
-          return tracker.trackAddToCart({ clientId: env.clientId ?? '', ...(input ?? {}) });
+        async trackAddToCart(input?: BoundAddToCartInput): Promise<ServerHelperResult> {
+          const i = input ?? {};
+          const clientId = i.clientId ?? env.clientId;
+          if (clientId === undefined) {
+            throw new Error(
+              '[trackbridge] fromContext-bound trackAddToCart called without clientId — ' +
+                'envelope did not capture one and input did not supply one',
+            );
+          }
+          return tracker.trackAddToCart({
+            transactionId: i.transactionId,
+            value: i.value,
+            currency: i.currency,
+            items: i.items,
+            clientId,
+            userId: i.userId ?? env.userId,
+            gclid: i.gclid ?? env.clickIds.gclid,
+            gbraid: i.gbraid ?? env.clickIds.gbraid,
+            wbraid: i.wbraid ?? env.clickIds.wbraid,
+            userData: i.userData ?? env.userData,
+            consent: i.consent ?? env.consent,
+          });
         },
-        async trackSignUp(input?) {
-          return tracker.trackSignUp({ clientId: env.clientId ?? '', ...(input ?? {}) });
+        async trackSignUp(input?: BoundSignUpInput): Promise<ServerHelperResult> {
+          const i = input ?? {};
+          const clientId = i.clientId ?? env.clientId;
+          if (clientId === undefined) {
+            throw new Error(
+              '[trackbridge] fromContext-bound trackSignUp called without clientId — ' +
+                'envelope did not capture one and input did not supply one',
+            );
+          }
+          return tracker.trackSignUp({
+            transactionId: i.transactionId,
+            method: i.method,
+            clientId,
+            userId: i.userId ?? env.userId,
+            gclid: i.gclid ?? env.clickIds.gclid,
+            gbraid: i.gbraid ?? env.clickIds.gbraid,
+            wbraid: i.wbraid ?? env.clickIds.wbraid,
+            userData: i.userData ?? env.userData,
+            consent: i.consent ?? env.consent,
+          });
         },
-        async trackRefund(input) {
-          return tracker.trackRefund({ clientId: env.clientId ?? '', ...input });
+        async trackRefund(input: BoundRefundInput): Promise<ServerHelperResult> {
+          const clientId = input.clientId ?? env.clientId;
+          if (clientId === undefined) {
+            throw new Error(
+              '[trackbridge] fromContext-bound trackRefund called without clientId — ' +
+                'envelope did not capture one and input did not supply one',
+            );
+          }
+          return tracker.trackRefund({
+            transactionId: input.transactionId,
+            value: input.value,
+            currency: input.currency,
+            items: input.items,
+            affiliation: input.affiliation,
+            coupon: input.coupon,
+            shipping: input.shipping,
+            tax: input.tax,
+            clientId,
+            userId: input.userId ?? env.userId,
+            userData: input.userData ?? env.userData,
+            consent: input.consent ?? env.consent,
+          });
         },
       };
     },
