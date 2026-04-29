@@ -437,3 +437,139 @@ describe('trackRefund', () => {
     });
   });
 });
+
+describe('helpers — cross-cutting behavior', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
+  test('userData is dropped when ad_user_data consent is denied', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(
+      baseConfig({ io, consentMode: 'v2', conversionLabels: { purchase: 'L' } }),
+    );
+    tracker.updateConsent({
+      ad_storage: 'granted',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      analytics_storage: 'granted',
+    });
+
+    await tracker.trackPurchase({
+      transactionId: 'order_1',
+      value: 10,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      userData: { email: 'foo@example.com' },
+    });
+
+    // The `set user_data` gtag call should NOT appear when consent denied.
+    const setUserData = gtagCalls.find(
+      (c) => c[0] === 'set' && c[1] === 'user_data',
+    );
+    expect(setUserData).toBeUndefined();
+  });
+
+  test('userData is set on gtag when ad_user_data consent is granted', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(
+      baseConfig({ io, consentMode: 'v2', conversionLabels: { purchase: 'L' } }),
+    );
+    tracker.updateConsent({
+      ad_storage: 'granted',
+      ad_user_data: 'granted',
+      ad_personalization: 'granted',
+      analytics_storage: 'granted',
+    });
+
+    await tracker.trackPurchase({
+      transactionId: 'order_1',
+      value: 10,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      userData: { email: 'foo@example.com' },
+    });
+
+    const setUserData = gtagCalls.find(
+      (c) => c[0] === 'set' && c[1] === 'user_data',
+    );
+    expect(setUserData).toBeDefined();
+  });
+
+  test('Ads-side throw does NOT prevent GA4 from firing (and vice versa)', async () => {
+    let throwOn: 'conversion' | 'purchase' | null = 'conversion';
+    const seen: string[] = [];
+    const failingIO: BrowserIO = {
+      getUrlSearch: () => '',
+      getCookieHeader: () => '',
+      writeCookie: () => {},
+      gtag: (...args) => {
+        if (args[0] === 'event' && args[1] === throwOn) {
+          throw new Error('boom');
+        }
+        if (args[0] === 'event') seen.push(String(args[1]));
+      },
+    };
+    const tracker = createBrowserTracker(
+      baseConfig({ io: failingIO, conversionLabels: { purchase: 'L' } }),
+    );
+
+    // Ads throws — GA4 should still fire.
+    await tracker.trackPurchase({
+      transactionId: 'order_1',
+      value: 10,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+    });
+    expect(seen).toContain('purchase');
+    expect(seen).not.toContain('conversion');
+
+    // Now flip: GA4 throws — Ads should still have fired.
+    seen.length = 0;
+    throwOn = 'purchase';
+    await tracker.trackPurchase({
+      transactionId: 'order_2',
+      value: 10,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+    });
+    expect(seen).toContain('conversion');
+    expect(seen).not.toContain('purchase');
+  });
+
+  test('helpers all return Promise<void> and resolve even when both branches throw', async () => {
+    const failingIO: BrowserIO = {
+      getUrlSearch: () => '',
+      getCookieHeader: () => '',
+      writeCookie: () => {},
+      gtag: () => {
+        throw new Error('boom');
+      },
+    };
+    const tracker = createBrowserTracker(
+      baseConfig({ io: failingIO, conversionLabels: { purchase: 'L' } }),
+    );
+
+    await expect(
+      tracker.trackPurchase({
+        transactionId: 'o',
+        value: 1,
+        currency: 'USD',
+        items: [{ itemId: 'a' }],
+      }),
+    ).resolves.toBeUndefined();
+    await expect(tracker.trackBeginCheckout()).resolves.toBeUndefined();
+    await expect(tracker.trackAddToCart()).resolves.toBeUndefined();
+    await expect(tracker.trackSignUp()).resolves.toBeUndefined();
+    await expect(
+      tracker.trackRefund({
+        transactionId: 'o',
+        value: 1,
+        currency: 'USD',
+        items: [{ itemId: 'a' }],
+      }),
+    ).resolves.toBeUndefined();
+  });
+});
