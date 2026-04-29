@@ -35,8 +35,8 @@ export type BrowserIO = {
   gtag(...args: unknown[]): void;
 };
 
-import type { ConsentState, ConsentUpdate, TrackbridgeContext, TrackbridgeItem, UserData } from '@trackbridge/core';
-export type { ConsentValue, ConsentUpdate, ConsentState } from '@trackbridge/core';
+import type { ConsentState, ConsentUpdate, TrackbridgeContext, TrackbridgeItem, UserData } from '../core/index.js';
+export type { ConsentValue, ConsentUpdate, ConsentState } from '../core/index.js';
 
 /**
  * Input for {@link BrowserTracker.trackEvent}. Mirror of

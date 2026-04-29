@@ -26,4 +26,4 @@ export type {
   ConsentValue,
   ExportContextInput,
 } from './types.js';
-export type { TrackbridgeContext, TrackbridgeItem } from '@trackbridge/core';
+export type { TrackbridgeContext, TrackbridgeItem } from '../core/index.js';
