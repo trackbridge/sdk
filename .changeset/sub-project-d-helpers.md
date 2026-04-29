@@ -1,7 +1,5 @@
 ---
-'@trackbridge/core': minor
-'@trackbridge/browser': minor
-'@trackbridge/server': minor
+'@trackbridge/sdk': minor
 ---
 
 feat(helpers): add semantic event helpers — trackPurchase, trackBeginCheckout, trackAddToCart, trackSignUp, trackRefund
