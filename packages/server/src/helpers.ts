@@ -13,6 +13,7 @@ import type {
   ServerConsent,
   ServerHelperResult,
   ServerPurchaseInput,
+  ServerSignUpInput,
   ServerTracker,
 } from './types.js';
 
@@ -239,6 +240,41 @@ export async function executeAddToCart(
       currency: input.currency,
       items: input.items,
     }),
+    clientId: input.clientId,
+    userId: input.userId,
+    userData: input.userData,
+    consent: input.consent,
+  });
+
+  const [ads, ga4] = await Promise.all([adsP, ga4P]);
+  return { ads, ga4 };
+}
+
+export async function executeSignUp(
+  input: ServerSignUpInput,
+  ctx: ServerHelperContext,
+): Promise<ServerHelperResult> {
+  const transactionId = ctx.resolveTransactionId(input.transactionId);
+
+  const adsP: Promise<HelperSendResult> = (async () => {
+    const label = ctx.conversionLabels.signUp;
+    if (label === undefined) return { skipped: true, reason: 'no_label_configured' };
+    return fireAdsConversion(ctx, {
+      label,
+      transactionId,
+      value: undefined,
+      currency: undefined,
+      gclid: input.gclid,
+      gbraid: input.gbraid,
+      wbraid: input.wbraid,
+      userData: input.userData,
+      consent: input.consent,
+    });
+  })();
+
+  const ga4P = fireGa4(ctx, {
+    helperName: 'signUp',
+    params: buildGa4Params({ transactionId, method: input.method }),
     clientId: input.clientId,
     userId: input.userId,
     userData: input.userData,

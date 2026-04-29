@@ -257,3 +257,59 @@ describe('serverTracker.trackAddToCart', () => {
     expect(result.ga4).toEqual({ ok: true });
   });
 });
+
+describe('serverTracker.trackSignUp', () => {
+  test('fires GA4 sign_up with method param', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(baseConfig({ fetch: fn }));
+
+    const result = await tracker.trackSignUp({
+      transactionId: 'user_42',
+      method: 'email',
+      clientId: '1.2',
+    });
+
+    expect(result.ads).toEqual({ skipped: true, reason: 'no_label_configured' });
+
+    const ga4Call = calls.find((c) => c.url.includes('/mp/collect'))!;
+    const body = ga4Call.body as { events: Array<{ name: string; params: Record<string, unknown> }> };
+    expect(body.events[0]!.name).toBe('sign_up');
+    expect(body.events[0]!.params).toMatchObject({
+      transaction_id: 'user_42',
+      method: 'email',
+    });
+  });
+
+  test('fires Ads label-only conversion when signUp label configured (no value/currency)', async () => {
+    const { fn, calls } = captureFetch(
+      new Response(JSON.stringify({ access_token: 'tok', expires_in: 3600 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const tracker = createServerTracker(
+      baseConfig({
+        fetch: fn,
+        ads: {
+          ...baseAds,
+          conversionActions: {
+            ...baseAds.conversionActions,
+            SIGNUP_LABEL: 'customers/1234567890/conversionActions/333',
+          },
+        },
+        conversionLabels: { signUp: 'SIGNUP_LABEL' },
+      }),
+    );
+
+    const result = await tracker.trackSignUp({
+      transactionId: 'user_42',
+      method: 'google',
+      clientId: '1.2',
+      gclid: 'g',
+    });
+
+    expect(result.ads).toEqual({ ok: true });
+    expect(result.ga4).toEqual({ ok: true });
+    expect(calls.some((c) => c.url.includes('googleads'))).toBe(true);
+  });
+});
