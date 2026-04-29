@@ -154,6 +154,47 @@ describe('trackPurchase', () => {
     expect(callOrder).toContain('event:purchase');
   });
 
+  test('preserves value: 0 (free purchase) — does not drop the key', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(
+      baseConfig({ io, conversionLabels: { purchase: 'L' } }),
+    );
+
+    await tracker.trackPurchase({
+      transactionId: 'order_42',
+      value: 0,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+    });
+
+    const ga4Call = gtagCalls.find((c) => c[1] === 'purchase')!;
+    const ga4Params = ga4Call[2] as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(ga4Params, 'value')).toBe(true);
+    expect(ga4Params.value).toBe(0);
+
+    const adsCall = gtagCalls.find((c) => c[1] === 'conversion')!;
+    const adsParams = adsCall[2] as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(adsParams, 'value')).toBe(true);
+    expect(adsParams.value).toBe(0);
+  });
+
+  test('preserves empty items array on the GA4 call (does not drop the key)', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    await tracker.trackPurchase({
+      transactionId: 'order_42',
+      value: 99.99,
+      currency: 'USD',
+      items: [],
+    });
+
+    const ga4Call = gtagCalls.find((c) => c[1] === 'purchase')!;
+    const params = ga4Call[2] as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(params, 'items')).toBe(true);
+    expect(params.items).toEqual([]);
+  });
+
   test('logs a warning on Ads-side failure when debug is on', async () => {
     const failingIO: BrowserIO = {
       getUrlSearch: () => '',

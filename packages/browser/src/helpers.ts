@@ -33,6 +33,11 @@ export type BrowserHelperContext = {
   readonly resolveTransactionId: (input: string | undefined) => string;
 };
 
+/**
+ * Drops only `undefined` keys. Preserves `0`, `false`, `''`, and `null`
+ * so free purchases (`value: 0`), explicit clears, and empty strings
+ * reach the wire intact.
+ */
 function dropUndefined<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
