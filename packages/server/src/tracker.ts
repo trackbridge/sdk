@@ -294,11 +294,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
     resolveTransactionId: (incoming) => {
       if (incoming !== undefined && incoming !== '') return incoming;
       const generated = generateTransactionId();
-      if (debug) {
-        console.warn(
-          `[trackbridge] auto-generated transactionId "${generated}" — Dual-send disabled for this call.`,
-        );
-      }
+      warnAutoTransactionId(generated);
       return generated;
     },
   };
