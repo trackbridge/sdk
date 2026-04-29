@@ -40,7 +40,7 @@ export type { ConsentValue, ConsentUpdate, ConsentState } from '../core/index.js
 
 /**
  * Input for {@link BrowserTracker.trackEvent}. Mirror of
- * {@link import('@trackbridge/server').ServerEventInput} — same shape
+ * {@link import('@trackbridge/sdk/server').ServerEventInput} — same shape
  * minus `clientId`, which the browser doesn't need (gtag tracks the
  * GA4 client ID itself).
  *

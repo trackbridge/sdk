@@ -1,5 +1,5 @@
 /**
- * @trackbridge/browser
+ * @trackbridge/sdk/browser
  *
  * Client-side tracker. Wraps gtag, captures click identifiers,
  * fires conversions and events with Consent Mode v2 awareness.

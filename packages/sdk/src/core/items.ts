@@ -84,7 +84,7 @@ export function mapItemsForGa4(
 /**
  * Internal canonical-name map. Single source of truth for the wire
  * names used by gtag (`event` second arg) and GA4 MP (`events[].name`).
- * Both `@trackbridge/browser` and `@trackbridge/server` reference this.
+ * Both the browser and server entries reference this.
  */
 export const GA4_EVENT_NAMES = {
   purchase: 'purchase',

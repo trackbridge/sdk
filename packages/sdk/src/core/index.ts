@@ -1,8 +1,6 @@
 /**
- * @trackbridge/core
- *
- * Shared types, normalization, and hashing logic used by both
- * @trackbridge/browser and @trackbridge/server.
+ * Internal core module — shared types, normalization, and hashing
+ * logic used by both the browser and server entries of @trackbridge/sdk.
  *
  * The contract here is the foundation of dual-send: identical input
  * must produce identical hashed output across runtimes, or Google

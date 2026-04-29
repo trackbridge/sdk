@@ -17,7 +17,7 @@ export type Address = {
  * The user-identifying fields used for enhanced conversions matching.
  *
  * Identical shape on browser and server — both packages import this type
- * from `@trackbridge/core`. All fields are pre-normalization; the SDK
+ * from the internal core module. All fields are pre-normalization; the SDK
  * applies normalization and SHA-256 hashing before sending to Google.
  */
 export type UserData = {

@@ -1,5 +1,5 @@
 /**
- * @trackbridge/server
+ * @trackbridge/sdk/server
  *
  * Server-side tracker. Talks to the Google Ads API for conversion uploads
  * and the GA4 Measurement Protocol for events, with hashed user data.
