@@ -244,6 +244,11 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
             consent: input.consent ?? env.consent,
           });
         },
+        // Plan Task 16 replaces these bound stubs with envelope-merging implementations
+        // (clientId / click IDs / userId / userData / consent merged from envelope, with
+        // input overriding on conflict — same precedence as `trackEvent` / `trackConversion`
+        // above). The `?? ''` placeholders are build-green only — outer-tracker stubs
+        // don't fire, so empty strings never reach the wire. Do NOT ship as-is.
         async trackPurchase(input) {
           return tracker.trackPurchase({ clientId: env.clientId ?? '', ...input });
         },
