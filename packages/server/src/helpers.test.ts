@@ -347,3 +347,137 @@ describe('serverTracker.trackRefund', () => {
     expect(calls.some((c) => c.url.includes('googleads'))).toBe(false);
   });
 });
+
+describe('server helpers — cross-cutting behavior', () => {
+  test('partial failure: Ads errors but GA4 succeeds — both surfaced independently', async () => {
+    let mpCalls = 0;
+    let oauthCalls = 0;
+    let adsUploadCalls = 0;
+    const fn: typeof globalThis.fetch = async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/mp/collect')) {
+        mpCalls += 1;
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes('oauth2.googleapis.com/token')) {
+        oauthCalls += 1;
+        return new Response(JSON.stringify({ access_token: 'tok', expires_in: 3600 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('googleads.googleapis.com')) {
+        adsUploadCalls += 1;
+        return new Response(null, { status: 500 });
+      }
+      return new Response(null, { status: 404 });
+    };
+
+    const tracker = createServerTracker(
+      baseConfig({
+        fetch: fn,
+        ads: baseAds,
+        conversionLabels: { purchase: 'PURCHASE_LABEL' },
+      }),
+    );
+
+    const result = await tracker.trackPurchase({
+      transactionId: 'order_42',
+      value: 1,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      clientId: '1.2',
+      gclid: 'g',
+    });
+
+    expect(result.ga4).toEqual({ ok: true });
+    expect(result.ads).toMatchObject({ ok: false });
+    expect(mpCalls).toBe(1);
+    expect(adsUploadCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  test('GA4 transport error + Ads success → reverse partial failure', async () => {
+    const fn: typeof globalThis.fetch = async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/mp/collect')) return new Response(null, { status: 500 });
+      if (url.includes('oauth2.googleapis.com/token')) {
+        return new Response(JSON.stringify({ access_token: 'tok', expires_in: 3600 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('googleads.googleapis.com')) return new Response(null, { status: 200 });
+      return new Response(null, { status: 404 });
+    };
+
+    const tracker = createServerTracker(
+      baseConfig({ fetch: fn, ads: baseAds, conversionLabels: { purchase: 'PURCHASE_LABEL' } }),
+    );
+
+    const result = await tracker.trackPurchase({
+      transactionId: 'order_42',
+      value: 1,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      clientId: '1.2',
+      gclid: 'g',
+    });
+
+    expect(result.ga4).toMatchObject({ ok: false });
+    expect(result.ads).toEqual({ ok: true });
+  });
+
+  test('Ads and GA4 branches run concurrently (Promise.all)', async () => {
+    const observed: string[] = [];
+    let resolveAds: (v: Response) => void = () => {};
+    const adsPromise = new Promise<Response>((r) => {
+      resolveAds = r;
+    });
+    let resolveGa4: (v: Response) => void = () => {};
+    const ga4Promise = new Promise<Response>((r) => {
+      resolveGa4 = r;
+    });
+
+    const fn: typeof globalThis.fetch = async (input) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/mp/collect')) {
+        observed.push('mp:start');
+        return ga4Promise;
+      }
+      if (url.includes('oauth2.googleapis.com/token')) {
+        return new Response(JSON.stringify({ access_token: 'tok', expires_in: 3600 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('googleads.googleapis.com')) {
+        observed.push('ads:start');
+        return adsPromise;
+      }
+      return new Response(null, { status: 404 });
+    };
+
+    const tracker = createServerTracker(
+      baseConfig({ fetch: fn, ads: baseAds, conversionLabels: { purchase: 'PURCHASE_LABEL' } }),
+    );
+
+    const callP = tracker.trackPurchase({
+      transactionId: 'order_42',
+      value: 1,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      clientId: '1.2',
+      gclid: 'g',
+    });
+
+    // Allow microtasks to flush so both branches start
+    await new Promise((r) => setTimeout(r, 0));
+    expect(observed).toContain('mp:start');
+    expect(observed).toContain('ads:start');
+
+    resolveAds(new Response(null, { status: 200 }));
+    resolveGa4(new Response(null, { status: 204 }));
+    await callP;
+  });
+});
