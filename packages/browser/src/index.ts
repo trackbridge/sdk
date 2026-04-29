@@ -9,10 +9,15 @@ export const VERSION = '0.0.1';
 
 export { createBrowserTracker } from './tracker.js';
 export type {
+  BrowserAddToCartInput,
+  BrowserBeginCheckoutInput,
   BrowserConversionInput,
   BrowserEventInput,
   BrowserIO,
   BrowserPageViewInput,
+  BrowserPurchaseInput,
+  BrowserRefundInput,
+  BrowserSignUpInput,
   BrowserTracker,
   BrowserTrackerConfig,
   ClickIdentifiers,
@@ -21,4 +26,4 @@ export type {
   ConsentValue,
   ExportContextInput,
 } from './types.js';
-export type { TrackbridgeContext } from '@trackbridge/core';
+export type { TrackbridgeContext, TrackbridgeItem } from '@trackbridge/core';

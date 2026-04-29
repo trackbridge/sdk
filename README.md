@@ -174,6 +174,45 @@ Verbose pre-hash / post-hash tracing and a structured event log are planned for 
 
 ---
 
+## Semantic event helpers
+
+Five typed helpers cover the GA4 ecommerce events most apps need. Each one fans out: an Ads conversion (when a label is configured) and the matching GA4 event share one `transactionId` for dedup. Items are first-class — no untyped `params.items: [...]` anymore.
+
+```ts
+const tracker = createBrowserTracker({
+  adsConversionId: 'AW-XXXXXXX',
+  ga4MeasurementId: 'G-XXXXXXX',
+  conversionLabels: {
+    purchase: 'abc123',          // configured → trackPurchase fires Ads + GA4
+    signUp: 'def456',            // configured → trackSignUp fires Ads + GA4
+    // beginCheckout, addToCart left unconfigured → fire GA4 only
+  },
+});
+
+await tracker.trackPurchase({
+  transactionId: 'order-42',
+  value: 99.99,
+  currency: 'USD',
+  items: [
+    { itemId: 'SKU-1', itemName: 'Widget', price: 99.99, quantity: 1 },
+  ],
+});
+```
+
+The same five methods are on the server tracker (with required `clientId`) and on the bound tracker returned by `fromContext`. The server flavor returns a `ServerHelperResult`:
+
+```ts
+const result = await serverTracker.trackPurchase({ /* ... */ });
+// result.ads: { ok: true } | { ok: false; error } | { skipped: true; reason: 'no_label_configured' | 'refund_ads_unsupported' }
+// result.ga4: { ok: true } | { ok: false; error }
+```
+
+`trackRefund` always skips Ads in v1 — refund Ads adjustments require the `uploadConversionAdjustments` API and are out of scope for this release. The GA4 `refund` event fires normally.
+
+The existing `trackConversion` and `trackEvent` methods remain available as escape hatches for events without a typed helper.
+
+---
+
 ## Consent Mode v2
 
 Pass `consentMode: 'v2'` on the browser tracker and Trackbridge respects two consent signals from your CMP:

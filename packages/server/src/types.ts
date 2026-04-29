@@ -1,4 +1,4 @@
-import type { ConsentValue, TrackbridgeContext, UserData } from '@trackbridge/core';
+import type { ConsentValue, TrackbridgeContext, TrackbridgeItem, UserData } from '@trackbridge/core';
 export type { ConsentValue } from '@trackbridge/core';
 
 /**
@@ -70,6 +70,17 @@ export type ServerTrackerConfig = {
    * absent.
    */
   generateTransactionId?: () => string;
+  /**
+   * Per-helper Ads conversion labels. Same shape as the browser-side
+   * config. Helper without an entry → fires GA4 only. `refund` key
+   * intentionally absent — refund Ads is unsupported in v1.
+   */
+  conversionLabels?: {
+    purchase?: string;
+    beginCheckout?: string;
+    addToCart?: string;
+    signUp?: string;
+  };
 };
 
 /**
@@ -179,6 +190,11 @@ export type BoundServerConversionInput = ServerConversionInput;
 export type ContextBoundServerTracker = {
   trackEvent(input: BoundServerEventInput): Promise<ServerEventResult>;
   trackConversion(input: BoundServerConversionInput): Promise<ServerConversionResult>;
+  trackPurchase(input: BoundPurchaseInput): Promise<ServerHelperResult>;
+  trackBeginCheckout(input?: BoundBeginCheckoutInput): Promise<ServerHelperResult>;
+  trackAddToCart(input?: BoundAddToCartInput): Promise<ServerHelperResult>;
+  trackSignUp(input?: BoundSignUpInput): Promise<ServerHelperResult>;
+  trackRefund(input: BoundRefundInput): Promise<ServerHelperResult>;
 };
 
 export type ServerTracker = {
@@ -203,4 +219,142 @@ export type ServerTracker = {
    * missing required shape).
    */
   fromContext(envelope: TrackbridgeContext): ContextBoundServerTracker;
+  trackPurchase(input: ServerPurchaseInput): Promise<ServerHelperResult>;
+  trackBeginCheckout(input: ServerBeginCheckoutInput): Promise<ServerHelperResult>;
+  trackAddToCart(input: ServerAddToCartInput): Promise<ServerHelperResult>;
+  trackSignUp(input: ServerSignUpInput): Promise<ServerHelperResult>;
+  trackRefund(input: ServerRefundInput): Promise<ServerHelperResult>;
+};
+
+/**
+ * Input for `serverTracker.trackPurchase`. `transactionId` is required
+ * (no auto-generation) — purchase is the canonical dual-fire dedup target.
+ * Fires Ads when `config.conversionLabels.purchase` is set; GA4 always
+ * (when `ga4MeasurementId` configured).
+ */
+export type ServerPurchaseInput = {
+  transactionId: string;
+  value: number;
+  currency: string;
+  items: TrackbridgeItem[];
+  clientId: string;
+  userId?: string;
+  gclid?: string;
+  gbraid?: string;
+  wbraid?: string;
+  affiliation?: string;
+  coupon?: string;
+  shipping?: number;
+  tax?: number;
+  userData?: UserData;
+  consent?: ServerConsent;
+};
+
+/**
+ * Input for `serverTracker.trackBeginCheckout`. Most fields optional —
+ * `clientId` always required for GA4 MP.
+ */
+export type ServerBeginCheckoutInput = {
+  transactionId?: string;
+  value?: number;
+  currency?: string;
+  items?: TrackbridgeItem[];
+  coupon?: string;
+  clientId: string;
+  userId?: string;
+  gclid?: string;
+  gbraid?: string;
+  wbraid?: string;
+  userData?: UserData;
+  consent?: ServerConsent;
+};
+
+/**
+ * Input for `serverTracker.trackAddToCart`. Most fields optional —
+ * `clientId` always required for GA4 MP.
+ */
+export type ServerAddToCartInput = {
+  transactionId?: string;
+  value?: number;
+  currency?: string;
+  items?: TrackbridgeItem[];
+  clientId: string;
+  userId?: string;
+  gclid?: string;
+  gbraid?: string;
+  wbraid?: string;
+  userData?: UserData;
+  consent?: ServerConsent;
+};
+
+/**
+ * Input for `serverTracker.trackSignUp`. `method` maps to GA4's
+ * `method` param.
+ */
+export type ServerSignUpInput = {
+  transactionId?: string;
+  method?: string;
+  clientId: string;
+  userId?: string;
+  gclid?: string;
+  gbraid?: string;
+  wbraid?: string;
+  userData?: UserData;
+  consent?: ServerConsent;
+};
+
+/**
+ * Input for `serverTracker.trackRefund`. `transactionId` is required to
+ * refund the original purchase by the same dedup key. Always fires GA4
+ * only — `conversionLabels.refund` is intentionally not supported in v1.
+ */
+export type ServerRefundInput = {
+  transactionId: string;
+  value?: number;
+  currency?: string;
+  items?: TrackbridgeItem[];
+  affiliation?: string;
+  coupon?: string;
+  shipping?: number;
+  tax?: number;
+  clientId: string;
+  userId?: string;
+  userData?: UserData;
+  consent?: ServerConsent;
+};
+
+/**
+ * Per-destination result for the helpers. Mirrors the existing
+ * `SendResult` (`{ ok: true } | { ok: false; error: Error }`) plus a
+ * `{ skipped: true; reason }` variant for cases where the helper
+ * deliberately did not fire (no label configured, or refund Ads
+ * unsupported in v1). Existing `SendResult` is unchanged.
+ */
+export type HelperSendResult =
+  | { ok: true }
+  | { ok: false; error: Error }
+  | {
+      skipped: true;
+      reason: 'no_label_configured' | 'refund_ads_unsupported';
+    };
+
+export type ServerHelperResult = {
+  ads: HelperSendResult;
+  ga4: HelperSendResult;
+};
+
+export type BoundPurchaseInput = Omit<ServerPurchaseInput, 'clientId'> & {
+  clientId?: string;
+};
+export type BoundBeginCheckoutInput = Omit<ServerBeginCheckoutInput, 'clientId'> & {
+  clientId?: string;
+};
+export type BoundAddToCartInput = Omit<ServerAddToCartInput, 'clientId'> & {
+  clientId?: string;
+};
+export type BoundSignUpInput = Omit<ServerSignUpInput, 'clientId'> & {
+  clientId?: string;
+};
+export type BoundRefundInput = Omit<ServerRefundInput, 'clientId'> & {
+  clientId?: string;
 };

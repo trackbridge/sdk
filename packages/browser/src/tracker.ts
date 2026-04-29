@@ -13,11 +13,24 @@ import {
   parseClickIdentifiersFromCookies,
   parseClickIdentifiersFromUrl,
 } from './click-ids.js';
+import {
+  executeAddToCart,
+  executeBeginCheckout,
+  executePurchase,
+  executeRefund,
+  executeSignUp,
+  type BrowserHelperContext,
+} from './helpers.js';
 import type {
+  BrowserAddToCartInput,
+  BrowserBeginCheckoutInput,
   BrowserConversionInput,
   BrowserEventInput,
   BrowserIO,
   BrowserPageViewInput,
+  BrowserPurchaseInput,
+  BrowserRefundInput,
+  BrowserSignUpInput,
   BrowserTracker,
   BrowserTrackerConfig,
   ClickIdentifiers,
@@ -47,7 +60,7 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
   const io = config.io ?? createDefaultBrowserIO();
   let debug = resolveInitialDebug(config, io);
   const generateTransactionId =
-    config.generateTransactionId ?? (() => `tb_${globalThis.crypto.randomUUID()}`);
+    config.generateTransactionId ?? defaultGenerateTransactionId;
   const now = config.now ?? (() => Date.now());
 
   // Replace the two-boolean state with a four-key record. The signals
@@ -83,6 +96,24 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     if (consent.ad_user_data !== 'granted') return;
     const built = await buildGtagUserData(userData);
     if (built !== undefined) io.gtag('set', 'user_data', built);
+  };
+
+  const conversionLabels = config.conversionLabels ?? {};
+  const resolveTransactionId = (incoming: string | undefined): string => {
+    if (incoming !== undefined && incoming !== '') return incoming;
+    const generated = generateTransactionId();
+    warnAutoTransactionId(generated);
+    return generated;
+  };
+
+  const helperContext: BrowserHelperContext = {
+    adsConversionId: config.adsConversionId,
+    conversionLabels,
+    debug: () => debug,
+    ids: () => ({ ...ids }),
+    maybeSetUserData,
+    gtag: (...args) => io.gtag(...args),
+    resolveTransactionId,
   };
 
   return {
@@ -220,17 +251,50 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
         if (debug) console.warn('[trackbridge] gtag page_view failed:', err);
       }
     },
+    async trackPurchase(input: BrowserPurchaseInput): Promise<void> {
+      await executePurchase(input, helperContext);
+    },
+    async trackBeginCheckout(input?: BrowserBeginCheckoutInput): Promise<void> {
+      await executeBeginCheckout(input, helperContext);
+    },
+    async trackAddToCart(input?: BrowserAddToCartInput): Promise<void> {
+      await executeAddToCart(input, helperContext);
+    },
+    async trackSignUp(input?: BrowserSignUpInput): Promise<void> {
+      await executeSignUp(input, helperContext);
+    },
+    async trackRefund(input: BrowserRefundInput): Promise<void> {
+      await executeRefund(input, helperContext);
+    },
   };
 }
 
 function warnAutoTransactionId(id: string): void {
   console.warn(
-    `[trackbridge] ⚠️ trackConversion called without transactionId\n` +
+    `[trackbridge] ⚠️ called without transactionId\n` +
       `  → Auto-generated: ${id}\n` +
       `  → Dual-send disabled for this call. Pass a transactionId you control\n` +
       `    to enable cross-side dedup.\n` +
       `  → See: https://docs.trackbridge.dev/sdk/concepts/deduplication/`,
   );
+}
+
+/**
+ * Default auto-generator for transactionId. Prefers `crypto.randomUUID`
+ * when WebCrypto is exposed globally (modern browsers, Node 19+); falls
+ * back to time + Math.random in environments without it (Node 18.x
+ * without `--experimental-global-webcrypto`, older jsdom test envs).
+ *
+ * The fallback is not crypto-grade — but transactionId is a dedup key,
+ * not a security primitive, so collision resistance from timestamp +
+ * randomness is sufficient. Consumers who care about cryptographic
+ * randomness pass their own `generateTransactionId` via config.
+ */
+function defaultGenerateTransactionId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return `tb_${globalThis.crypto.randomUUID()}`;
+  }
+  return `tb_${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 type GtagAddressEntry = {

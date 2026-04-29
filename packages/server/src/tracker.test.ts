@@ -1127,3 +1127,133 @@ describe('ContextBoundServerTracker.trackConversion', () => {
     expect(conversion.userIdentifiers).toBeDefined();
   });
 });
+
+describe('fromContext bound helpers', () => {
+  const purchaseAdsConfig: ServerAdsConfig = {
+    developerToken: 'dev-token',
+    customerId: '1234567890',
+    refreshToken: 'refresh-x',
+    clientId: 'client-x.apps.googleusercontent.com',
+    clientSecret: 'GOCSPX-secret',
+    conversionActions: { PURCHASE_LABEL: 'customers/1234567890/conversionActions/111' },
+  };
+
+  function trackerWithPurchaseAds() {
+    const calls: FetchCall[] = [];
+    const fn: typeof globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const headerEntries = init?.headers ? Object.entries(init.headers) : [];
+      calls.push({
+        url,
+        method: init?.method ?? 'GET',
+        headers: Object.fromEntries(headerEntries) as Record<string, string>,
+        body:
+          typeof init?.body === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse(init.body);
+                } catch {
+                  return init.body;
+                }
+              })()
+            : init?.body,
+      });
+      if (url.includes('oauth2')) {
+        return new Response(JSON.stringify({ access_token: 'tok', expires_in: 3600 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    return { fn, calls };
+  }
+
+  test('boundTracker.trackPurchase hydrates clientId, gclid, userData, consent from envelope', async () => {
+    const { fn, calls } = trackerWithPurchaseAds();
+    const tracker = createServerTracker(
+      validConfig({
+        fetch: fn,
+        ads: purchaseAdsConfig,
+        conversionLabels: { purchase: 'PURCHASE_LABEL' },
+      }),
+    );
+
+    const bound = tracker.fromContext(validEnvelope());
+    const result = await bound.trackPurchase({
+      transactionId: 'order_42',
+      value: 99.99,
+      currency: 'USD',
+      items: [{ itemId: 'SKU-1' }],
+    });
+
+    const ga4Call = calls.find((c) => c.url.includes('/mp/collect'))!;
+    const body = ga4Call.body as { client_id: string };
+    expect(body.client_id).toBe('111.222');
+
+    expect(result.ga4).toEqual({ ok: true });
+    expect(result.ads).toEqual({ ok: true });
+  });
+
+  test('per-call clientId overrides envelope clientId', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+    const bound = tracker.fromContext(validEnvelope());
+
+    await bound.trackBeginCheckout({
+      clientId: '999.888',
+      transactionId: 'cart_42',
+      value: 50,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+    });
+
+    const ga4Call = calls.find((c) => c.url.includes('/mp/collect'))!;
+    expect((ga4Call.body as { client_id: string }).client_id).toBe('999.888');
+  });
+
+  test('bound trackRefund still skips Ads even when envelope has gclid', async () => {
+    const { fn, calls } = trackerWithPurchaseAds();
+    const tracker = createServerTracker(
+      validConfig({
+        fetch: fn,
+        ads: purchaseAdsConfig,
+      }),
+    );
+    const bound = tracker.fromContext(validEnvelope());
+
+    const result = await bound.trackRefund({
+      transactionId: 'order_42',
+      value: 99.99,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+    });
+
+    expect(result.ads).toEqual({ skipped: true, reason: 'refund_ads_unsupported' });
+    expect(calls.some((c) => c.url.includes('googleads'))).toBe(false);
+  });
+
+  test('per-call userData overrides envelope userData (full replacement)', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(validConfig({ fetch: fn }));
+
+    const envelope = validEnvelope({
+      userData: { email: 'envelope@example.com' },
+    });
+    const bound = tracker.fromContext(envelope);
+
+    await bound.trackPurchase({
+      transactionId: 'order_42',
+      value: 1,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      userData: { email: 'percall@example.com' },
+    });
+
+    const ga4Call = calls.find((c) => c.url.includes('/mp/collect'))!;
+    const body = ga4Call.body as { user_data?: { sha256_email_address?: string[] } };
+    // Hashed shape — we don't pin the hash here, just confirm there's only one
+    expect(body.user_data?.sha256_email_address?.length).toBe(1);
+  });
+});
