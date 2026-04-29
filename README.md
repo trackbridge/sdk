@@ -8,7 +8,7 @@
 Trackbridge is a TypeScript SDK that fires conversion events from both the browser **and** your server, dedupes them automatically, and tells you exactly what happened. One install, two-sided tracking, zero guesswork.
 
 ```bash
-pnpm add @trackbridge/browser @trackbridge/server
+pnpm add @trackbridge/sdk
 ```
 
 ---
@@ -37,7 +37,7 @@ It does **not** try to be a universal analytics platform. It does Google Ads + G
 
 ```ts
 // app/layout.tsx (or wherever your root is)
-import { createBrowserTracker } from '@trackbridge/browser';
+import { createBrowserTracker } from '@trackbridge/sdk/browser';
 
 export const tracker = createBrowserTracker({
   adsConversionId: 'AW-123456789',
@@ -51,7 +51,7 @@ export const tracker = createBrowserTracker({
 
 ```ts
 // lib/tracker.ts
-import { createServerTracker } from '@trackbridge/server';
+import { createServerTracker } from '@trackbridge/sdk/server';
 
 export const serverTracker = createServerTracker({
   ga4MeasurementId: 'G-XXXXXXXXXX',
@@ -283,7 +283,7 @@ tracker.trackConversion({ /* no transactionId */ ... });
 
 ### gclid / gbraid / wbraid — captured automatically
 
-When a user lands on your site from a Google ad, the URL contains `?gclid=...` (or `gbraid` / `wbraid` for iOS/ATT-restricted environments). `@trackbridge/browser` reads these on init, stores them in first-party cookies, and attaches them to every conversion automatically.
+When a user lands on your site from a Google ad, the URL contains `?gclid=...` (or `gbraid` / `wbraid` for iOS/ATT-restricted environments). `@trackbridge/sdk/browser` reads these on init, stores them in first-party cookies, and attaches them to every conversion automatically.
 
 You do nothing on the browser side. It just works.
 
@@ -435,11 +435,14 @@ Note: `identifyUser` and `clearUser` push `gtag('config', …)` with `send_page_
 
 ## What's in the box
 
-| Package | What it does |
+One package, two subpath entry points:
+
+| Import | What it does |
 |---|---|
-| `@trackbridge/core` | Shared types, normalization, hashing. You usually don't import this directly. |
-| `@trackbridge/browser` | Client-side tracker. Wraps `gtag`, handles consent, fires conversions. |
-| `@trackbridge/server` | Server-side tracker. Talks to Google Ads API, fires conversions with hashed user data. |
+| `@trackbridge/sdk/browser` | Client-side tracker. Wraps `gtag`, handles consent, fires conversions. |
+| `@trackbridge/sdk/server` | Server-side tracker. Talks to Google Ads API, fires conversions with hashed user data. |
+
+Shared types, normalization, and hashing live inside the package and are used by both subpaths — you don't import them directly. The `@trackbridge/sdk/next` subpath is reserved for a future framework-helpers module.
 
 ---
 
