@@ -1,5 +1,5 @@
-import type { ConsentValue, TrackbridgeContext, TrackbridgeItem, UserData } from '@trackbridge/core';
-export type { ConsentValue } from '@trackbridge/core';
+import type { ConsentValue, TrackbridgeContext, TrackbridgeItem, UserData } from '../core/index.js';
+export type { ConsentValue } from '../core/index.js';
 
 /**
  * Per-call consent signals for the server tracker. Unlike the browser

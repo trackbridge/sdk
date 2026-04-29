@@ -6,7 +6,7 @@ import {
   normalizePhone,
   type TrackbridgeContext,
   type UserData,
-} from '@trackbridge/core';
+} from '../core/index.js';
 
 import { createAdsApiClient, type AdsApiClient } from './ads-api.js';
 import {

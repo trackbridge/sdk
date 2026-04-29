@@ -3,7 +3,7 @@ import {
   GA4_EVENT_NAMES,
   type SemanticHelperName,
   type UserData,
-} from '@trackbridge/core';
+} from '../core/index.js';
 
 import type {
   HelperSendResult,

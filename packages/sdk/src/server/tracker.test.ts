@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { TrackbridgeContext } from '@trackbridge/core';
+import type { TrackbridgeContext } from '../core/index.js';
 
 import { createServerTracker } from './tracker.js';
 import type { ServerAdsConfig, ServerTrackerConfig } from './types.js';
