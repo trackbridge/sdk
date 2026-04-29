@@ -9,6 +9,7 @@ import {
 } from '@trackbridge/core';
 
 import { createAdsApiClient, type AdsApiClient } from './ads-api.js';
+import { executePurchase, type ServerHelperContext } from './helpers.js';
 import { createAccessTokenProvider } from './oauth.js';
 import type {
   BoundServerConversionInput,
@@ -268,6 +269,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
     },
 
     async trackPurchase(_input: ServerPurchaseInput): Promise<ServerHelperResult> {
+      // Replaced below via helperContext assignment after tracker is constructed.
       return { ads: { skipped: true, reason: 'no_label_configured' }, ga4: { ok: true } };
     },
     async trackBeginCheckout(_input: ServerBeginCheckoutInput): Promise<ServerHelperResult> {
@@ -283,6 +285,26 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
       return { ads: { skipped: true, reason: 'refund_ads_unsupported' }, ga4: { ok: true } };
     },
   };
+
+  const helperContext: ServerHelperContext = {
+    underlying: tracker,
+    conversionLabels: config.conversionLabels ?? {},
+    hasMeasurementId: Boolean(config.ga4MeasurementId),
+    hasAds: config.ads !== undefined && adsApiClient !== null,
+    resolveTransactionId: (incoming) => {
+      if (incoming !== undefined && incoming !== '') return incoming;
+      const generated = generateTransactionId();
+      if (debug) {
+        console.warn(
+          `[trackbridge] auto-generated transactionId "${generated}" — Dual-send disabled for this call.`,
+        );
+      }
+      return generated;
+    },
+  };
+
+  tracker.trackPurchase = (input) => executePurchase(input, helperContext);
+
   return tracker;
 }
 
