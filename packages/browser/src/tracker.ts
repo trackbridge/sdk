@@ -13,7 +13,7 @@ import {
   parseClickIdentifiersFromCookies,
   parseClickIdentifiersFromUrl,
 } from './click-ids.js';
-import { executePurchase, type BrowserHelperContext } from './helpers.js';
+import { executeBeginCheckout, executePurchase, type BrowserHelperContext } from './helpers.js';
 import type {
   BrowserAddToCartInput,
   BrowserBeginCheckoutInput,
@@ -248,7 +248,9 @@ export function createBrowserTracker(config: BrowserTrackerConfig): BrowserTrack
     async trackPurchase(input: BrowserPurchaseInput): Promise<void> {
       await executePurchase(input, helperContext);
     },
-    async trackBeginCheckout(_input?: BrowserBeginCheckoutInput): Promise<void> {},
+    async trackBeginCheckout(input?: BrowserBeginCheckoutInput): Promise<void> {
+      await executeBeginCheckout(input, helperContext);
+    },
     async trackAddToCart(_input?: BrowserAddToCartInput): Promise<void> {},
     async trackSignUp(_input?: BrowserSignUpInput): Promise<void> {},
     async trackRefund(_input: BrowserRefundInput): Promise<void> {},

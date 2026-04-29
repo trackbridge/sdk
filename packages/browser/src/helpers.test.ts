@@ -226,3 +226,65 @@ describe('trackPurchase', () => {
     expect(messages.some((m) => /trackbridge/.test(m))).toBe(true);
   });
 });
+
+describe('trackBeginCheckout', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  test('fires both Ads and GA4 when label configured', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(
+      baseConfig({ io, conversionLabels: { beginCheckout: 'BEGIN_LABEL' } }),
+    );
+
+    await tracker.trackBeginCheckout({
+      transactionId: 'cart_42',
+      value: 50,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      coupon: 'SAVE5',
+    });
+
+    const adsCall = gtagCalls.find((c) => c[1] === 'conversion')!;
+    expect((adsCall[2] as Record<string, unknown>).send_to).toBe('AW-12345/BEGIN_LABEL');
+
+    const ga4Call = gtagCalls.find((c) => c[1] === 'begin_checkout')!;
+    const params = ga4Call[2] as Record<string, unknown>;
+    expect(params.transaction_id).toBe('cart_42');
+    expect(params.coupon).toBe('SAVE5');
+    expect(params.items).toEqual([{ item_id: 'a' }]);
+  });
+
+  test('fires GA4 only when label absent', async () => {
+    const { io, gtagCalls } = captureIO();
+    const tracker = createBrowserTracker(baseConfig({ io }));
+
+    await tracker.trackBeginCheckout({
+      transactionId: 'cart_42',
+      value: 50,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+    });
+
+    expect(gtagCalls.find((c) => c[1] === 'conversion')).toBeUndefined();
+    expect(gtagCalls.find((c) => c[1] === 'begin_checkout')).toBeDefined();
+  });
+
+  test('auto-generates transactionId with debug warn when omitted', async () => {
+    const { io, gtagCalls, generateTransactionId } = captureIO({
+      transactionId: 'tb_auto-cart',
+    });
+    const tracker = createBrowserTracker(baseConfig({ io, generateTransactionId }));
+
+    await tracker.trackBeginCheckout({});
+
+    expect(warnSpy).toHaveBeenCalled();
+    const ga4Call = gtagCalls.find((c) => c[1] === 'begin_checkout')!;
+    expect((ga4Call[2] as Record<string, unknown>).transaction_id).toBe('tb_auto-cart');
+  });
+});
