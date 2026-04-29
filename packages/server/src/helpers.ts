@@ -8,6 +8,7 @@ import {
 
 import type {
   HelperSendResult,
+  ServerAddToCartInput,
   ServerBeginCheckoutInput,
   ServerConsent,
   ServerHelperResult,
@@ -197,6 +198,46 @@ export async function executeBeginCheckout(
       currency: input.currency,
       items: input.items,
       coupon: input.coupon,
+    }),
+    clientId: input.clientId,
+    userId: input.userId,
+    userData: input.userData,
+    consent: input.consent,
+  });
+
+  const [ads, ga4] = await Promise.all([adsP, ga4P]);
+  return { ads, ga4 };
+}
+
+export async function executeAddToCart(
+  input: ServerAddToCartInput,
+  ctx: ServerHelperContext,
+): Promise<ServerHelperResult> {
+  const transactionId = ctx.resolveTransactionId(input.transactionId);
+
+  const adsP: Promise<HelperSendResult> = (async () => {
+    const label = ctx.conversionLabels.addToCart;
+    if (label === undefined) return { skipped: true, reason: 'no_label_configured' };
+    return fireAdsConversion(ctx, {
+      label,
+      transactionId,
+      value: input.value,
+      currency: input.currency,
+      gclid: input.gclid,
+      gbraid: input.gbraid,
+      wbraid: input.wbraid,
+      userData: input.userData,
+      consent: input.consent,
+    });
+  })();
+
+  const ga4P = fireGa4(ctx, {
+    helperName: 'addToCart',
+    params: buildGa4Params({
+      transactionId,
+      value: input.value,
+      currency: input.currency,
+      items: input.items,
     }),
     clientId: input.clientId,
     userId: input.userId,

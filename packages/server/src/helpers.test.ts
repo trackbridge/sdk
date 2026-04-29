@@ -204,3 +204,56 @@ describe('serverTracker.trackBeginCheckout', () => {
     }
   });
 });
+
+describe('serverTracker.trackAddToCart', () => {
+  test('fires GA4 add_to_cart event, skips Ads without label', async () => {
+    const { fn, calls } = captureFetch();
+    const tracker = createServerTracker(baseConfig({ fetch: fn }));
+
+    const result = await tracker.trackAddToCart({
+      value: 25,
+      currency: 'USD',
+      items: [{ itemId: 'a', quantity: 2 }],
+      clientId: '1.2',
+    });
+
+    expect(result.ads).toEqual({ skipped: true, reason: 'no_label_configured' });
+    const ga4Call = calls.find((c) => c.url.includes('/mp/collect'))!;
+    const body = ga4Call.body as { events: Array<{ name: string; params: Record<string, unknown> }> };
+    expect(body.events[0]!.name).toBe('add_to_cart');
+    expect(body.events[0]!.params.items).toEqual([{ item_id: 'a', quantity: 2 }]);
+  });
+
+  test('fires Ads when addToCart label configured', async () => {
+    const { fn } = captureFetch(
+      new Response(JSON.stringify({ access_token: 'tok', expires_in: 3600 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const tracker = createServerTracker(
+      baseConfig({
+        fetch: fn,
+        ads: {
+          ...baseAds,
+          conversionActions: {
+            ...baseAds.conversionActions,
+            CART_LABEL: 'customers/1234567890/conversionActions/222',
+          },
+        },
+        conversionLabels: { addToCart: 'CART_LABEL' },
+      }),
+    );
+
+    const result = await tracker.trackAddToCart({
+      value: 25,
+      currency: 'USD',
+      items: [{ itemId: 'a' }],
+      clientId: '1.2',
+      gclid: 'g',
+    });
+
+    expect(result.ads).toEqual({ ok: true });
+    expect(result.ga4).toEqual({ ok: true });
+  });
+});

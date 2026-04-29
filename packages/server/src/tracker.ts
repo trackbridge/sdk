@@ -9,7 +9,7 @@ import {
 } from '@trackbridge/core';
 
 import { createAdsApiClient, type AdsApiClient } from './ads-api.js';
-import { executeBeginCheckout, executePurchase, type ServerHelperContext } from './helpers.js';
+import { executeAddToCart, executeBeginCheckout, executePurchase, type ServerHelperContext } from './helpers.js';
 import { createAccessTokenProvider } from './oauth.js';
 import type {
   BoundServerConversionInput,
@@ -301,6 +301,7 @@ export function createServerTracker(config: ServerTrackerConfig): ServerTracker 
 
   tracker.trackPurchase = (input) => executePurchase(input, helperContext);
   tracker.trackBeginCheckout = (input) => executeBeginCheckout(input, helperContext);
+  tracker.trackAddToCart = (input) => executeAddToCart(input, helperContext);
 
   return tracker;
 }
