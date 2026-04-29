@@ -24,6 +24,7 @@ export default defineConfig([
     format: ['esm', 'cjs'],
     dts: true,
     sourcemap: true,
+    // First entry cleans dist/; do not flip without re-pairing.
     clean: false,
     target: 'node18',
     platform: 'node',
