@@ -28,8 +28,11 @@ export function TrackbridgeProvider({
   children,
 }: TrackbridgeProviderProps): ReactNode {
   const consent: ConsentState = { ...DEFAULT_CONSENT_DENIED, ...consentDefaults };
-  // Loader URL prefers the Ads ID (one gtag.js handles multiple `config` calls).
-  const loaderId = config.adsConversionId;
+  // Loader URL prefers the Ads ID (one gtag.js handles multiple `config`
+  // calls). Falls back to GA4 if Ads is ever absent — defensive against
+  // future config-shape loosening, no behavior change while adsConversionId
+  // is required.
+  const loaderId = config.adsConversionId ?? config.ga4MeasurementId;
   const consentScript = `window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('consent', 'default', ${JSON.stringify(consent)});`;
