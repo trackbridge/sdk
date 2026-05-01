@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
+import { createServerTracker } from '../../server/index.js';
 import { readEnvelopeFromRequest } from './read-envelope.js';
 
 // Minimal stand-ins for Next's ReadonlyHeaders / ReadonlyRequestCookies.
@@ -99,5 +100,56 @@ describe('readEnvelopeFromRequest', () => {
     });
     expect(env).not.toBeNull();
     expect(env!.clickIds?.gclid).toBe('gcl-abc');
+  });
+
+  test('cookie-only envelope has required clickIds and consent fields populated', () => {
+    const env = readEnvelopeFromRequest({
+      headers: makeHeaders({}),
+      cookies: makeCookies({ _ga: 'GA1.2.111.222' }),
+    });
+    expect(env).not.toBeNull();
+    expect(env!.clickIds).toBeDefined();
+    expect(env!.consent).toBeDefined();
+    expect(env!.consent).toEqual({
+      ad_storage: 'unknown',
+      ad_user_data: 'unknown',
+      ad_personalization: 'unknown',
+      analytics_storage: 'unknown',
+    });
+  });
+
+  test('header-only envelope without clickIds/consent gets defaults synthesized', () => {
+    const env = readEnvelopeFromRequest({
+      headers: makeHeaders({
+        'x-trackbridge-context': JSON.stringify({ v: 1, clientId: 'c', createdAt: 1 }),
+      }),
+      cookies: makeCookies({}),
+    });
+    expect(env).not.toBeNull();
+    expect(env!.clickIds).toEqual({});
+    expect(env!.consent).toEqual({
+      ad_storage: 'unknown',
+      ad_user_data: 'unknown',
+      ad_personalization: 'unknown',
+      analytics_storage: 'unknown',
+    });
+  });
+
+  test('produces an envelope that serverTracker.fromContext() accepts', () => {
+    // Smoke test: the helper's output must round-trip through fromContext
+    // without throwing. This was the actual bug — required fields missing.
+    const tracker = createServerTracker({
+      ga4MeasurementId: 'G-TEST',
+      ga4ApiSecret: 'secret',
+    });
+
+    const env = readEnvelopeFromRequest({
+      headers: makeHeaders({}),
+      cookies: makeCookies({ _ga: 'GA1.2.111.222', _tb_gclid: 'g-1' }),
+    });
+    expect(env).not.toBeNull();
+    // fromContext throws if required fields are missing — this would have
+    // caught the original bug.
+    expect(() => tracker.fromContext(env!)).not.toThrow();
   });
 });

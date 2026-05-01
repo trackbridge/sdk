@@ -22,6 +22,18 @@ export type ReadEnvelopeFromRequestArgs = {
   cookies: CookieReader;
 };
 
+// Default consent state used when neither cookies nor headers carry it.
+// 'unknown' (not 'denied') because this helper RECONSTRUCTS state server-
+// side — we don't know what the user actually granted; 'unknown' is the
+// honest default. The consumer can pass an explicit consent via the
+// x-trackbridge-context header or override per-request.
+const DEFAULT_CONSENT_UNKNOWN: TrackbridgeContext['consent'] = {
+  ad_storage: 'unknown',
+  ad_user_data: 'unknown',
+  ad_personalization: 'unknown',
+  analytics_storage: 'unknown',
+};
+
 /**
  * Reads the auto-captured first-party Trackbridge / GA cookies plus an
  * optional `x-trackbridge-context` JSON header, returning a partial
@@ -43,10 +55,21 @@ export function readEnvelopeFromRequest({
   if (fromCookies === null && fromHeader === null) {
     return null;
   }
-  if (fromCookies === null) return fromHeader;
   if (fromHeader === null) return fromCookies;
-  // Header wins per field.
-  return { ...fromCookies, ...fromHeader };
+  if (fromCookies === null) return ensureRequiredFields(fromHeader);
+  // Header wins per field; required fields are kept (cookies guaranteed them).
+  return ensureRequiredFields({ ...fromCookies, ...fromHeader });
+}
+
+// Ensures `clickIds` and `consent` are present (required by TrackbridgeContext).
+// Header-only paths or partial header payloads may lack them — the
+// `as TrackbridgeContext` cast in `readFromHeader` lies about runtime shape.
+function ensureRequiredFields(env: TrackbridgeContext): TrackbridgeContext {
+  return {
+    ...env,
+    clickIds: env.clickIds ?? {},
+    consent: env.consent ?? DEFAULT_CONSENT_UNKNOWN,
+  };
 }
 
 function readFromCookies(cookies: CookieReader): TrackbridgeContext | null {
@@ -55,9 +78,13 @@ function readFromCookies(cookies: CookieReader): TrackbridgeContext | null {
 
   if (clickIds === null && clientId === null) return null;
 
-  const env: TrackbridgeContext = { v: 1, createdAt: Date.now() };
+  const env: TrackbridgeContext = {
+    v: 1,
+    createdAt: Date.now(),
+    clickIds: clickIds ?? {},
+    consent: DEFAULT_CONSENT_UNKNOWN,
+  };
   if (clientId !== null) env.clientId = clientId;
-  if (clickIds !== null) env.clickIds = clickIds;
   return env;
 }
 
