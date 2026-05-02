@@ -1,0 +1,10 @@
+{
+  "extends": "../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "lib": ["ES2022", "WebWorker"],
+    "types": ["node"]
+  },
+  "include": ["**/*.ts", "../../core/**/*.ts", "../../server/**/*.ts"],
+  "exclude": ["node_modules", "**/*.test.ts"]
+}
