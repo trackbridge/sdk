@@ -8,7 +8,7 @@
   "homepage": "https://trackbridge.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/trackbridge/sdk.git"
+    "url": "git+https://github.com/trackbridge/sdk.git"
   },
   "scripts": {
     "build": "pnpm -r --filter './packages/*' build",
