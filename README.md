@@ -1,7 +1,7 @@
 # Trackbridge
 
 [![CI](https://github.com/trackbridge/sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/trackbridge/sdk/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/trackbridge/sdk/blob/main/LICENSE)
 
 **Stop losing Google Ads conversions to client-side failures.**
 

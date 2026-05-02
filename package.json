@@ -1,8 +1,7 @@
 {
-  "name": "trackbridge",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Dual-send conversion tracking for Google Ads and GA4",
+  "name": "@trackbridge/sdk",
+  "version": "0.1.0",
+  "description": "Dual-send conversion tracking for Google Ads and GA4 — browser, server, and (soon) Next.js.",
   "license": "MIT",
   "author": "Trackbridge",
   "homepage": "https://trackbridge.dev",
@@ -10,28 +9,72 @@
     "type": "git",
     "url": "git+https://github.com/trackbridge/sdk.git"
   },
+  "type": "module",
+  "exports": {
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "import": "./dist/browser/index.js",
+      "require": "./dist/browser/index.cjs"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.cjs"
+    },
+    "./next": {
+      "types": "./dist/next/index.d.ts",
+      "import": "./dist/next/index.js",
+      "require": "./dist/next/index.cjs"
+    },
+    "./next/server": {
+      "types": "./dist/next/server/index.d.ts",
+      "import": "./dist/next/server/index.js",
+      "require": "./dist/next/server/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
   "scripts": {
-    "build": "pnpm -r --filter './packages/*' build",
-    "dev": "pnpm -r --filter './packages/*' --parallel dev",
-    "test": "pnpm -r --filter './packages/*' test",
-    "test:watch": "pnpm -r --filter './packages/*' --parallel test:watch",
-    "typecheck": "pnpm -r --filter './packages/*' typecheck",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p src/core/tsconfig.test.json && tsc --noEmit -p src/browser/tsconfig.test.json && tsc --noEmit -p src/server/tsconfig.test.json && tsc --noEmit -p src/next/tsconfig.test.json && tsc --noEmit -p src/next/server/tsconfig.test.json",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build && changeset publish",
-    "clean": "pnpm -r exec rm -rf dist node_modules .turbo && rm -rf node_modules"
+    "clean": "rm -rf dist node_modules"
+  },
+  "peerDependencies": {
+    "next": "^15.0.0",
+    "react": "^18.2.0 || ^19.0.0",
+    "react-dom": "^18.2.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "next": { "optional": true },
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",
+    "@testing-library/react": "^16.0.0",
     "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "happy-dom": "^15.0.0",
+    "next": "^15.0.0",
     "prettier": "^3.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   },
+  "publishConfig": { "access": "public" },
   "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=18.17.0"
-  }
+  },
+  "sideEffects": false
 }

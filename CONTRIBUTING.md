@@ -4,9 +4,9 @@ Trackbridge is in early development. The API may change before 1.0.
 
 ## Development setup
 
-Trackbridge is a pnpm monorepo. You need:
+Trackbridge is a single-package repo. You need:
 
-- **Node.js 18.17+** (we test against 18.17 and 20 — the lower bound is the floor for `globalThis.crypto`-via-fallback support; see `packages/sdk/src/core/hash.ts`)
+- **Node.js 18.17+** (we test against 18.17 and 20 — the lower bound is the floor for `globalThis.crypto`-via-fallback support; see `src/core/hash.ts`)
 - **pnpm 9.12+**
 
 ```bash
@@ -19,25 +19,26 @@ pnpm install
 
 ```
 trackbridge/
-├── packages/
-│   └── sdk/           @trackbridge/sdk     — single published package
-│       └── src/
-│           ├── core/        (internal — types, normalization, hashing)
-│           ├── browser/     → @trackbridge/sdk/browser (client-side tracker)
-│           └── server/      → @trackbridge/sdk/server  (server-side tracker)
-└── .changeset/        version bump intents
+├── src/
+│   ├── core/         (internal — types, normalization, hashing)
+│   ├── browser/      → @trackbridge/sdk/browser     (client-side tracker)
+│   ├── server/       → @trackbridge/sdk/server      (server-side tracker)
+│   └── next/
+│       ├── *.tsx     → @trackbridge/sdk/next        (React provider, client helpers)
+│       └── server/   → @trackbridge/sdk/next/server (Node-side adapter)
+└── .changeset/       version bump intents
 ```
 
-`@trackbridge/sdk` ships as a single package with two public subpath entry points (`/browser`, `/server`). Shared types, normalization, and hashing live in `src/core/` and are not exported as a public subpath — they're an internal implementation detail of the two trackers, which is what keeps the dual-send invariant honest: there's only one normalizer, used by both sides.
+`@trackbridge/sdk` ships as a single package with public subpath entry points (`/browser`, `/server`, `/next`, `/next/server`). Shared types, normalization, and hashing live in `src/core/` and are not exported as a public subpath — they're an internal implementation detail of the trackers, which is what keeps the dual-send invariant honest: there's only one normalizer, used by both sides.
 
 ## Common commands
 
 ```bash
-pnpm build          # Build all packages (esm + cjs + .d.ts via tsup)
-pnpm dev            # Watch-mode build, all packages in parallel
+pnpm build          # Build all entry points (esm + cjs + .d.ts via tsup)
+pnpm dev            # Watch-mode build
 pnpm test           # Run all tests
 pnpm test:watch     # Watch-mode tests
-pnpm typecheck      # tsc --noEmit across all packages
+pnpm typecheck      # tsc --noEmit across each subpath tsconfig
 pnpm format         # Prettier across the repo
 pnpm changeset      # Record a versioning intent (see "Versioning")
 ```
@@ -57,7 +58,7 @@ If a phone number `+1 (555) 123-4567` hashes to one value in the browser and a d
 How we keep this from breaking:
 
 1. **All normalization lives in the internal `src/core/` subdirectory.** The browser and server modules import from it via relative paths; they never inline their own normalization.
-2. **Pinned golden hashes.** `packages/sdk/src/core/hash.test.ts` pins SHA-256 outputs for canonical inputs (`""`, `jane@example.com`, `café`, `+15551234567`). The same hashes are referenced by `packages/sdk/src/server/tracker.test.ts` and `packages/sdk/src/browser/tracker.test.ts` to verify the GA4-MP, gtag, and Ads-API adapters all hash the same bytes. Any change that alters a pinned hash is a breaking change requiring a major version bump.
+2. **Pinned golden hashes.** `src/core/hash.test.ts` pins SHA-256 outputs for canonical inputs (`""`, `jane@example.com`, `café`, `+15551234567`). The same hashes are referenced by `src/server/tracker.test.ts` and `src/browser/tracker.test.ts` to verify the GA4-MP, gtag, and Ads-API adapters all hash the same bytes. Any change that alters a pinned hash is a breaking change requiring a major version bump.
 3. **Cross-runtime CI matrix.** `.github/workflows/ci.yml` tests on Node 18.17 and Node 20. `hash.ts` has separate code paths for these (`globalThis.crypto.subtle` vs `node:crypto.webcrypto.subtle`); the matrix ensures both produce identical bytes.
 
 ## How we develop
@@ -72,9 +73,9 @@ For trackers (browser, server), prefer **fetch / I/O injection** over real netwo
 
 ## Adding a new normalizer
 
-1. **Add the function** to `packages/sdk/src/core/normalize/<field>.ts` — follow the shape of the existing ones (pure function, `string → string`).
-2. **Write golden tests** in `packages/sdk/src/core/normalize/<field>.test.ts`. At minimum: 5 canonical inputs with pinned outputs, plus an idempotency test, plus an empty-input test.
-3. **Add the field** to `UserData` in `packages/sdk/src/core/types.ts` if it's PII for enhanced conversions.
+1. **Add the function** to `src/core/normalize/<field>.ts` — follow the shape of the existing ones (pure function, `string → string`).
+2. **Write golden tests** in `src/core/normalize/<field>.test.ts`. At minimum: 5 canonical inputs with pinned outputs, plus an idempotency test, plus an empty-input test.
+3. **Add the field** to `UserData` in `src/core/types.ts` if it's PII for enhanced conversions.
 4. **Wire into the adapters** — `buildGa4UserData` (server `tracker.ts`), `buildGtagUserData` (browser `tracker.ts`), `buildAdsUserIdentifiers` (server `tracker.ts`). Each adapter has a different output shape, but they all consume `normalizeX` + `hashSha256` from `src/core/`.
 5. **Add pinned hashes** in `hash.test.ts` for the canonical normalized inputs, then reference them by name from the adapter tests. This is the cross-module golden-test pattern that catches the dual-send invariant breaking from any side.
 6. **Verify locally** — `pnpm test && pnpm typecheck && pnpm build` all green.
@@ -107,7 +108,7 @@ pnpm changeset
 
 Pick the bump type and write a summary that will appear in the changelog. The release workflow handles publishing on merge to `main` — the action opens a "chore: version packages" PR on every push to `main` that has pending changesets; merging that PR triggers the actual `pnpm release` (build + `changeset publish` to npm).
 
-There's a single published package (`@trackbridge/sdk`); subpaths share one version, so every release ships `/browser` and `/server` together.
+There's a single published package (`@trackbridge/sdk`); subpaths share one version, so every release ships `/browser`, `/server`, `/next`, and `/next/server` together.
 
 ## PR workflow
 
