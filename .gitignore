@@ -17,3 +17,6 @@ CLAUDE.md
 # Local worktrees for parallel branch work
 .worktrees
 
+# Local Claude Code config (agents, settings, etc.)
+.claude
+
